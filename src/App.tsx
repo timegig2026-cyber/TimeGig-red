@@ -379,11 +379,14 @@ export default function App() {
 
   const handleFocusRoute = useCallback(() => {
     if (!mapRef.current || !activeAssignment || !activeAssignment.routeCoords.length) return;
-    mapRef.current.fitBounds(L.latLngBounds(activeAssignment.routeCoords.filter((c) => isValidCoord({ lat: c[0], lng: c[1] }))), {
-      padding: [90, 90],
-      maxZoom: 16,
-      animate: true,
-    });
+    const validBounds = activeAssignment.routeCoords.filter((c) => isValidCoord({ lat: c[0], lng: c[1] }));
+    if (validBounds.length > 0) {
+      mapRef.current.fitBounds(L.latLngBounds(validBounds), {
+        padding: [90, 90],
+        maxZoom: 16,
+        animate: true,
+      });
+    }
   }, [activeAssignment]);
 
   const handleConfirmCompleteGig = useCallback(() => {
@@ -885,11 +888,14 @@ export default function App() {
 
     // Fit map bounds to show complete navigation path
     if (map) {
-      map.fitBounds(L.latLngBounds(routeCoords.filter((c) => isValidCoord({ lat: c[0], lng: c[1] }))), {
-        padding: [90, 90],
-        maxZoom: 16,
-        animate: true,
-      });
+      const validBounds = routeCoords.filter((c) => isValidCoord({ lat: c[0], lng: c[1] }));
+      if (validBounds.length > 0) {
+        map.fitBounds(L.latLngBounds(validBounds), {
+          padding: [90, 90],
+          maxZoom: 16,
+          animate: true,
+        });
+      }
     }
   }, [activeAssignment]);
 
