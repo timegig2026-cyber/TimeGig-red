@@ -233,6 +233,7 @@ export default function App() {
   const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'register'>('register');
   const [welcomeBannerMessage, setWelcomeBannerMessage] = useState<string | null>(null);
   const [isCompletingProfileAfterRegister, setIsCompletingProfileAfterRegister] = useState<boolean>(false);
+  const [profileStep, setProfileStep] = useState<number>(1);
 
   useEffect(() => {
     safeSaveProfile('active_gig_assignment', activeAssignment);
@@ -1787,10 +1788,10 @@ export default function App() {
 
       {/* Comprehensive Facebook-Style Profile Feature & Verification (Without back cover) */}
       {activeTab === 'profile' && (
-        <div className="absolute inset-x-4 top-6 bottom-24 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[620px] md:top-8 md:bottom-28 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 overflow-y-auto space-y-6 animate-fadeIn">
+        <div className="absolute inset-x-4 top-12 bottom-20 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[480px] md:top-16 md:bottom-24 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-4 overflow-y-auto space-y-4 animate-fadeIn">
           
           {/* Facebook-style Top Profile Header (Centered without cover photo) */}
-          <div className="flex flex-col items-center text-center pb-6 border-b border-slate-200 dark:border-slate-800 relative">
+          <div className="flex flex-col items-center text-center pb-4 border-b border-slate-200 dark:border-slate-800 relative">
             <button
               type="button"
               onClick={() => setActiveTab(null)}
@@ -1800,13 +1801,13 @@ export default function App() {
               <X className="w-5 h-5" />
             </button>
             
-            <div className="relative mb-3">
+            <div className="relative mb-2">
               <img
                 src={profile.avatar}
                 alt="Profile Selfie"
-                className="w-28 h-28 rounded-full object-cover border-4 border-white dark:border-slate-800 shadow-2xl"
+                className="w-20 h-20 rounded-full object-cover border-3 border-white dark:border-slate-800 shadow-xl"
               />
-              <span className="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center text-white text-xs font-bold" title="Verified Explorer">✓</span>
+              <span className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center text-white text-[10px] font-bold" title="Verified Explorer">✓</span>
             </div>
 
             <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">{profile.fullName}</h2>
@@ -1858,311 +1859,370 @@ export default function App() {
             </div>
           </div>
 
-          {/* New User Profile Completion Guidance Banner */}
-          {isCompletingProfileAfterRegister && (
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border-2 border-dashed border-emerald-500/50 text-slate-800 dark:text-slate-200 space-y-1.5 animate-fadeIn">
-              <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                <Sparkles className="w-4 h-4 text-emerald-500" />
-                <span>🎉 Step 2: Complete Your Explorer Profile</span>
+          {/* Multi-step Navigation Tabs */}
+          <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl mb-2">
+            {[
+              { step: 1, label: 'Photos & ID' },
+              { step: 2, label: 'Personal Info' },
+              { step: 3, label: 'Location' },
+              { step: 4, label: 'Contact & Socials' },
+            ].map((s) => (
+              <button
+                key={s.step}
+                type="button"
+                onClick={() => setProfileStep(s.step)}
+                className={`flex-1 py-1.5 px-2 text-[11px] font-bold rounded-xl transition-all ${
+                  profileStep === s.step
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                {s.step}. {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Step 1: Photos & ID Verification */}
+          {profileStep === 1 && (
+            <div className="space-y-4 animate-fadeIn">
+              {/* Section 1: Face Selfie / Profile Picture */}
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  1. Face Selfie / Profile Picture (Update once a month)
+                </label>
+                <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                  <img
+                    src={profile.avatar}
+                    alt="Selfie"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-blue-500 shadow-md shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-slate-900 dark:text-white">Active Face Verification Photo</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Restrictions apply: You can only update your profile picture once every 30 days.
+                    </div>
+                    {!isProfileLocked && (
+                      <label className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl cursor-pointer shadow-sm transition-all">
+                        <Camera className="w-3.5 h-3.5" /> Upload / Capture Selfie
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="user"
+                          onChange={handleAvatarChange}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
               </div>
-              <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
-                Welcome to GiG Explorer! Your account has been registered with <strong>{profile.email}</strong>. Please fill out your <strong>Full Name</strong>, <strong>Role / Bio</strong>, <strong>Location</strong>, and <strong>Contact Phone</strong> below so clients and seekers can connect with you. When finished, click <strong>"Save Profile"</strong> above to lock in your details.
-              </p>
+
+              {/* Section 2: ID Document Upload */}
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  2. ID Document Verification
+                </label>
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                        {profile.idDocName || 'No ID document uploaded'}
+                      </div>
+                      <div className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> Secure Government ID Verified
+                      </div>
+                    </div>
+                  </div>
+                  {!isProfileLocked && (
+                    <label className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white text-xs font-semibold rounded-xl cursor-pointer transition-all shrink-0">
+                      <Upload className="w-3.5 h-3.5 inline mr-1" /> Upload ID
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={handleIdDocChange}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Section 1: Face Selfie / Profile Picture (Once a month limit, stored in IndexedDB) */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              1. Face Selfie / Profile Picture (Update once a month)
-            </label>
-            <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-              <img
-                src={profile.avatar}
-                alt="Selfie"
-                className="w-16 h-16 rounded-full object-cover border-2 border-blue-500 shadow-md shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-slate-900 dark:text-white">Active Face Verification Photo</div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Restrictions apply: You can only update your profile picture once every 30 days.
-                </div>
-                {!isProfileLocked && (
-                  <label className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl cursor-pointer shadow-sm transition-all">
-                    <Camera className="w-3.5 h-3.5" /> Upload / Capture Selfie
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="user"
-                      onChange={handleAvatarChange}
-                      className="hidden"
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Section 2: ID Document Upload (Stored in IndexedDB) */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              2. ID Document Verification
-            </label>
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 shrink-0">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
-                    {profile.idDocName || 'No ID document uploaded'}
-                  </div>
-                  <div className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" /> Secure Government ID Verified
-                  </div>
-                </div>
-              </div>
-              {!isProfileLocked && (
-                <label className="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white text-xs font-semibold rounded-xl cursor-pointer transition-all shrink-0">
-                  <Upload className="w-3.5 h-3.5 inline mr-1" /> Upload ID
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={handleIdDocChange}
-                    className="hidden"
-                  />
-                </label>
-              )}
-            </div>
-          </div>
-
-          {/* Section 3: Basic Personal Information */}
-          <div className="space-y-3">
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              3. Basic Personal Information
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] text-slate-500 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  disabled={isProfileLocked}
-                  value={profile.fullName}
-                  onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
-                  className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] text-slate-500 mb-1">Role / Bio</label>
-                <input
-                  type="text"
-                  disabled={isProfileLocked}
-                  value={profile.bio}
-                  onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                  className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 4: Location & Province (Manual or Auto-detect GPS) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
+          {/* Step 2: Basic Personal Information */}
+          {profileStep === 2 && (
+            <div className="space-y-3 animate-fadeIn">
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                4. Location & Province
+                3. Basic Personal Information
               </label>
-              {!isProfileLocked && (
-                <button
-                  type="button"
-                  onClick={handleAutoLocation}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
-                >
-                  <Navigation className="w-3 h-3" /> Use My Location
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="relative">
-                <label className="block text-[11px] text-slate-500 mb-1">Location / City</label>
-                <div className="relative flex items-center">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-1">Full Name</label>
                   <input
                     type="text"
                     disabled={isProfileLocked}
-                    value={profile.location}
-                    onChange={(e) => setProfile({ ...profile, location: e.target.value })}
-                    onFocus={() => {
-                      if (profileLocationSuggestions.length > 0) setShowProfileLocDropdown(true);
-                    }}
-                    placeholder="e.g. Rosebank, Cape Town"
-                    className="w-full py-2.5 pl-3 pr-7 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={profile.fullName}
+                    onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
+                    className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  {isSearchingProfileLoc && (
-                    <div className="absolute right-2 flex items-center pointer-events-none">
-                      <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-1">Role / Bio</label>
+                  <input
+                    type="text"
+                    disabled={isProfileLocked}
+                    value={profile.bio}
+                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                    className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Location & Province */}
+          {profileStep === 3 && (
+            <div className="space-y-3 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  4. Location & Province
+                </label>
+                {!isProfileLocked && (
+                  <button
+                    type="button"
+                    onClick={handleAutoLocation}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
+                  >
+                    <Navigation className="w-3 h-3" /> Use My Location
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="relative">
+                  <label className="block text-[11px] text-slate-500 mb-1">Location / City</label>
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      disabled={isProfileLocked}
+                      value={profile.location}
+                      onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                      onFocus={() => {
+                        if (profileLocationSuggestions.length > 0) setShowProfileLocDropdown(true);
+                      }}
+                      placeholder="e.g. Rosebank, Cape Town"
+                      className="w-full py-2.5 pl-3 pr-7 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {isSearchingProfileLoc && (
+                      <div className="absolute right-2 flex items-center pointer-events-none">
+                        <div className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Profile Location Suggestions Dropdown */}
+                  {showProfileLocDropdown && profileLocationSuggestions.length > 0 && !isProfileLocked && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 max-h-48 overflow-y-auto">
+                      <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Location Suggestions
+                      </div>
+                      {profileLocationSuggestions.map((item) => {
+                        const city =
+                          item.address?.city ||
+                          item.address?.town ||
+                          item.address?.suburb ||
+                          item.display_name.split(',')[0].trim();
+                        const prov =
+                          item.address?.state ||
+                          item.address?.province ||
+                          item.address?.region ||
+                          item.address?.country ||
+                          '';
+                        return (
+                          <button
+                            key={item.place_id}
+                            type="button"
+                            onClick={() => {
+                              setProfile((prev) => ({
+                                ...prev,
+                                location: city,
+                                province: prov || prev.province,
+                              }));
+                              setShowProfileLocDropdown(false);
+                              showToast(`📍 Selected ${city}, ${prov}`);
+                            }}
+                            className="w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800/60 last:border-b-0"
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                                {city}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                {item.display_name}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-
-                {/* Profile Location Suggestions Dropdown */}
-                {showProfileLocDropdown && profileLocationSuggestions.length > 0 && !isProfileLocked && (
-                  <div className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 max-h-48 overflow-y-auto">
-                    <div className="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Location Suggestions
-                    </div>
-                    {profileLocationSuggestions.map((item) => {
-                      const city =
-                        item.address?.city ||
-                        item.address?.town ||
-                        item.address?.suburb ||
-                        item.display_name.split(',')[0].trim();
-                      const prov =
-                        item.address?.state ||
-                        item.address?.province ||
-                        item.address?.region ||
-                        item.address?.country ||
-                        '';
-                      return (
-                        <button
-                          key={item.place_id}
-                          type="button"
-                          onClick={() => {
-                            setProfile((prev) => ({
-                              ...prev,
-                              location: city,
-                              province: prov || prev.province,
-                            }));
-                            setShowProfileLocDropdown(false);
-                            showToast(`📍 Selected ${city}, ${prov}`);
-                          }}
-                          className="w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer border-b border-slate-100 dark:border-slate-800/60 last:border-b-0"
-                        >
-                          <MapPin className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-semibold text-slate-900 dark:text-white truncate">
-                              {city}
-                            </div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                              {item.display_name}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-[11px] text-slate-500 mb-1">Province / State</label>
-                <input
-                  type="text"
-                  disabled={isProfileLocked}
-                  value={profile.province}
-                  onChange={(e) => setProfile({ ...profile, province: e.target.value })}
-                  className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 5: Contact & Email Information */}
-          <div className="space-y-3">
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-              5. Contact & Email Information
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] text-slate-500 mb-1 flex items-center gap-1">
-                  <Phone className="w-3 h-3" /> Contact Phone
-                </label>
-                <input
-                  type="text"
-                  disabled={isProfileLocked}
-                  value={profile.contact}
-                  onChange={(e) => setProfile({ ...profile, contact: e.target.value })}
-                  className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] text-slate-500 mb-1 flex items-center gap-1">
-                  <Mail className="w-3 h-3" /> Email Address
-                </label>
-                <input
-                  type="email"
-                  disabled={isProfileLocked}
-                  value={profile.email}
-                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                  className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 6: Social Media Links (Dynamic add/remove) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                6. Social Media Links
-              </label>
-              {!isProfileLocked && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setProfile((prev) => ({
-                      ...prev,
-                      socials: [...prev.socials, { platform: '', url: '' }],
-                    }))
-                  }
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Link
-                </button>
-              )}
-            </div>
-            <div className="space-y-2">
-              {profile.socials.map((social, index) => (
-                <div key={index} className="flex items-center gap-2">
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-1">Province / State</label>
                   <input
                     type="text"
                     disabled={isProfileLocked}
-                    placeholder="Platform (e.g. GitHub)"
-                    value={social.platform}
-                    onChange={(e) => {
-                      const updated = [...profile.socials];
-                      updated[index].platform = e.target.value;
-                      setProfile({ ...profile, socials: updated });
-                    }}
-                    className="w-1/3 py-2 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none"
+                    value={profile.province}
+                    onChange={(e) => setProfile({ ...profile, province: e.target.value })}
+                    className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <input
-                    type="url"
-                    disabled={isProfileLocked}
-                    placeholder="Profile URL (https://...)"
-                    value={social.url}
-                    onChange={(e) => {
-                      const updated = [...profile.socials];
-                      updated[index].url = e.target.value;
-                      setProfile({ ...profile, socials: updated });
-                    }}
-                    className="flex-1 py-2 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none"
-                  />
-                  {!isProfileLocked && profile.socials.length > 1 && (
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Contact & Social Media Links */}
+          {profileStep === 4 && (
+            <div className="space-y-4 animate-fadeIn">
+              <div className="space-y-3">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  5. Contact & Email Information
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1 flex items-center gap-1">
+                      <Phone className="w-3 h-3" /> Contact Phone
+                    </label>
+                    <input
+                      type="text"
+                      disabled={isProfileLocked}
+                      value={profile.contact}
+                      onChange={(e) => setProfile({ ...profile, contact: e.target.value })}
+                      className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-500 mb-1 flex items-center gap-1">
+                      <Mail className="w-3 h-3" /> Email Address
+                    </label>
+                    <input
+                      type="email"
+                      disabled={isProfileLocked}
+                      value={profile.email}
+                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                      className="w-full py-2.5 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    6. Social Media Links
+                  </label>
+                  {!isProfileLocked && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setProfile({
-                          ...profile,
-                          socials: profile.socials.filter((_, i) => i !== index),
-                        });
-                      }}
-                      className="p-2 text-rose-500 hover:text-rose-700 transition-colors"
-                      title="Remove link"
+                      onClick={() =>
+                        setProfile((prev) => ({
+                          ...prev,
+                          socials: [...prev.socials, { platform: '', url: '' }],
+                        }))
+                      }
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold flex items-center gap-1"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Plus className="w-3.5 h-3.5" /> Add Link
                     </button>
                   )}
                 </div>
-              ))}
+                <div className="space-y-2">
+                  {profile.socials.map((social, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        disabled={isProfileLocked}
+                        placeholder="Platform (e.g. GitHub)"
+                        value={social.platform}
+                        onChange={(e) => {
+                          const updated = [...profile.socials];
+                          updated[index].platform = e.target.value;
+                          setProfile({ ...profile, socials: updated });
+                        }}
+                        className="w-1/3 py-2 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none"
+                      />
+                      <input
+                        type="url"
+                        disabled={isProfileLocked}
+                        placeholder="Profile URL (https://...)"
+                        value={social.url}
+                        onChange={(e) => {
+                          const updated = [...profile.socials];
+                          updated[index].url = e.target.value;
+                          setProfile({ ...profile, socials: updated });
+                        }}
+                        className="flex-1 py-2 px-3 text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white disabled:opacity-60 focus:outline-none"
+                      />
+                      {!isProfileLocked && profile.socials.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfile({
+                              ...profile,
+                              socials: profile.socials.filter((_, i) => i !== index),
+                            });
+                          }}
+                          className="p-2 text-rose-500 hover:text-rose-700 transition-colors"
+                          title="Remove link"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
+          )}
+
+          {/* Wizard Navigation Footer */}
+          <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 mt-4">
+            {profileStep > 1 ? (
+              <button
+                type="button"
+                onClick={() => setProfileStep(profileStep - 1)}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+              >
+                ← Previous
+              </button>
+            ) : (
+              <div />
+            )}
+
+            <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+              Step {profileStep} of 4
+            </div>
+
+            {profileStep < 4 ? (
+              <button
+                type="button"
+                onClick={() => setProfileStep(profileStep + 1)}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm cursor-pointer"
+              >
+                Next →
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSaveProfile}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" /> Save Profile
+              </button>
+            )}
           </div>
         </div>
       )}
