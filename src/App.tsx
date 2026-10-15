@@ -1788,7 +1788,7 @@ export default function App() {
 
       {/* Comprehensive Facebook-Style Profile Feature & Verification (Without back cover) */}
       {activeTab === 'profile' && (
-        <div className="absolute inset-x-4 top-12 bottom-20 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[480px] md:top-16 md:bottom-24 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-4 overflow-y-auto space-y-4 animate-fadeIn">
+        <div className="absolute inset-x-4 top-10 bottom-16 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[480px] md:top-14 md:bottom-20 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-3 overflow-y-auto space-y-3 animate-fadeIn">
           
           {/* Facebook-style Top Profile Header (Centered without cover photo) */}
           <div className="flex flex-col items-center text-center pb-4 border-b border-slate-200 dark:border-slate-800 relative">
@@ -2228,36 +2228,38 @@ export default function App() {
       )}
 
       {/* Docked Bottom Menu Bar */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl">
-        <div className="max-w-md mx-auto flex items-center justify-around px-6 py-3.5">
+      <nav className={`fixed bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl transition-all ${
+        activeTab === 'profile' ? 'py-0.5' : ''
+      }`}>
+        <div className={`max-w-md mx-auto flex items-center justify-around px-6 ${activeTab === 'profile' ? 'py-1' : 'py-3.5'}`}>
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'seekers' ? null : 'seekers')}
-            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+            className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
               activeTab === 'seekers' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Users className="w-5 h-5" />
-            <span className="text-[11px]">Seekers</span>
+            <Users className={activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} />
+            <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Seekers</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'tenantportal' ? null : 'tenantportal')}
-            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+            className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
               activeTab === 'tenantportal' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
             title="Portal"
             aria-label="Portal"
           >
-            <KeyRound className="w-5 h-5" />
-            <span className="text-[11px]">Portal</span>
+            <KeyRound className={activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} />
+            <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Portal</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'gigs' ? null : 'gigs')}
-            className={`flex flex-col items-center -mt-3 outline-none focus:outline-none transition-all duration-200 group ${
+            className={`flex flex-col items-center ${activeTab === 'profile' ? '-mt-1' : '-mt-3'} outline-none focus:outline-none transition-all duration-200 group ${
               activeTab === 'gigs'
                 ? 'text-orange-500 dark:text-orange-400 font-bold scale-105'
                 : 'text-slate-600 dark:text-slate-400 hover:text-orange-500 dark:hover:text-orange-400'
@@ -2266,15 +2268,15 @@ export default function App() {
             aria-label="GiGs"
           >
             <div
-              className={`p-2 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+              className={`p-1.5 rounded-xl flex items-center justify-center transition-all duration-200 ${
                 activeTab === 'gigs'
                   ? 'bg-orange-500/15 dark:bg-orange-500/25 ring-2 ring-orange-500/50 shadow-lg shadow-orange-500/25'
                   : 'group-hover:bg-orange-50 dark:group-hover:bg-slate-800'
               }`}
             >
-              <Flame className="w-10 h-10 fill-orange-500 text-orange-500 dark:fill-orange-400 dark:text-orange-400 drop-shadow-sm transition-transform group-hover:scale-110" />
+              <Flame className={`${activeTab === 'profile' ? 'w-6 h-6' : 'w-10 h-10'} fill-orange-500 text-orange-500 dark:fill-orange-400 dark:text-orange-400 drop-shadow-sm transition-transform group-hover:scale-110`} />
             </div>
-            <span className="text-xs font-bold tracking-tight -mt-0.5">GiGs</span>
+            <span className={`${activeTab === 'profile' ? 'text-[9px]' : 'text-xs'} font-bold tracking-tight -mt-0.5`}>GiGs</span>
           </button>
 
           {!isLoggedIn ? (
@@ -2284,18 +2286,18 @@ export default function App() {
                 setAuthModalInitialMode('login');
                 setIsAuthModalOpen(true);
               }}
-              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+              className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
                 isAuthModalOpen ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Lock className="w-5 h-5" />
-              <span className="text-[11px]">Login</span>
+              <Lock className={activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} />
+              <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Login</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={() => setActiveTab(activeTab === 'profile' ? null : 'profile')}
-              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+              className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
                 activeTab === 'profile' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -2303,11 +2305,11 @@ export default function App() {
                 <img
                   src={profile.avatar || DEFAULT_PROFILE.avatar}
                   alt={profile.fullName}
-                  className="w-5 h-5 rounded-full object-cover border border-blue-500"
+                  className={`${activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} rounded-full object-cover border border-blue-500`}
                 />
-                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white dark:border-slate-900" />
+                <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 border border-white dark:border-slate-900" />
               </div>
-              <span className="text-[11px]">Profile</span>
+              <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Profile</span>
             </button>
           )}
 
@@ -2315,7 +2317,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'settings' ? null : 'settings')}
-            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+            className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
               activeTab === 'settings'
                 ? 'text-blue-600 dark:text-blue-400 font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -2323,10 +2325,10 @@ export default function App() {
             title="Settings"
             aria-label="Settings"
           >
-            <div className="w-5 h-5 flex items-center justify-center">
-              <Settings className="w-5 h-5" />
+            <div className={`${activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} flex items-center justify-center`}>
+              <Settings className={activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} />
             </div>
-            <span className="text-[11px]">Settings</span>
+            <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Settings</span>
           </button>
 
         </div>
