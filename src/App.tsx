@@ -1788,7 +1788,7 @@ export default function App() {
 
       {/* Comprehensive Facebook-Style Profile Feature & Verification (Without back cover) */}
       {activeTab === 'profile' && (
-        <div className="absolute inset-x-4 top-10 bottom-16 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[480px] md:top-14 md:bottom-20 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-3 overflow-y-auto space-y-3 animate-fadeIn">
+        <div className="absolute inset-x-4 top-10 bottom-20 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[480px] md:top-14 md:bottom-20 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-3 overflow-y-auto space-y-3 animate-fadeIn">
           
           {/* Facebook-style Top Profile Header (Centered without cover photo) */}
           <div className="flex flex-col items-center text-center pb-4 border-b border-slate-200 dark:border-slate-800 relative">
