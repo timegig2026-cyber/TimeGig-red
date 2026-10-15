@@ -1867,7 +1867,7 @@ export default function App() {
       )}
 
       {/* Docked Bottom Menu Bar */}
-      <nav className="absolute bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl">
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl">
         <div className="max-w-md mx-auto flex items-center justify-around px-6 py-3.5">
           <button
             type="button"
