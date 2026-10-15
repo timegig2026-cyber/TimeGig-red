@@ -475,7 +475,9 @@ export default function App() {
       safeSaveProfile(`user_locked_${uid}`, true);
       try {
         const userRef = doc(db, 'users', uid);
-        await updateDoc(userRef, {
+        await setDoc(userRef, {
+          id: uid,
+          termsAccepted: true,
           fullName: profile.fullName || '',
           bio: profile.bio || '',
           location: profile.location || '',
@@ -485,7 +487,7 @@ export default function App() {
           avatar: profile.avatar || '',
           idDocName: profile.idDocName || '',
           updatedAt: serverTimestamp(),
-        });
+        }, { merge: true });
         showToast('Profile saved and synced to your cloud account! ☁️');
       } catch (err) {
         console.warn('Firestore profile update sync warning:', err);

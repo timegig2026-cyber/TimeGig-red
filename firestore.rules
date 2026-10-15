@@ -37,7 +37,7 @@ service cloud.firestore {
              (!('location' in data) || (data.location is string && data.location.size() <= 100)) &&
              (!('province' in data) || (data.province is string && data.province.size() <= 100)) &&
              (!('contact' in data) || (data.contact is string && data.contact.size() <= 50)) &&
-             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 2048)) &&
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 150000)) &&
              (!('idDocName' in data) || (data.idDocName is string && data.idDocName.size() <= 200));
     }
 
