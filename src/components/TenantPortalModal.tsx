@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, KeyRound, CheckCircle2, Shield, UserCheck, DollarSign, Sparkles, Info, Users, AlertCircle } from 'lucide-react';
 import { soundManager } from '../utils/sound';
+import { db, doc, getDoc, updateDoc } from '../firebase';
 
 interface TenantPortalModalProps {
   isOpen: boolean;
   onClose: () => void;
   isLoggedIn?: boolean;
+  userId?: string;
   userEmail?: string;
   userName?: string;
   onOpenAuthModal?: () => void;
@@ -18,6 +20,7 @@ type SubscriptionOption = 'tenant' | 'subscription' | null;
 export default function TenantPortalModal({
   isOpen,
   onClose,
+  userId,
   userEmail,
 }: TenantPortalModalProps) {
   const [selectedOption, setSelectedOption] = useState<SubscriptionOption>(null);
@@ -32,6 +35,24 @@ export default function TenantPortalModal({
   // Live capacities stored in localStorage
   const [tenantCount, setTenantCount] = useState<number>(0);
   const [subscriptionCount, setSubscriptionCount] = useState<number>(0);
+  const [subscriptionActive, setSubscriptionActive] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isOpen && userId) {
+      const checkSubscription = async () => {
+        try {
+          const userRef = doc(db, 'users', userId);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            setSubscriptionActive(userSnap.data().subscriptionActive || false);
+          }
+        } catch (e) {
+          console.error('Error checking subscription', e);
+        }
+      };
+      checkSubscription();
+    }
+  }, [isOpen, userId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -59,8 +80,8 @@ export default function TenantPortalModal({
     setConfirmed(false);
   };
 
-  const handleConfirm = () => {
-    if (!selectedOption) return;
+  const handleConfirm = async () => {
+    if (!selectedOption || !userId) return;
 
     try {
       // Tenant activation does not increment the count
@@ -70,6 +91,10 @@ export default function TenantPortalModal({
         const next = subscriptionCount + 1;
         setSubscriptionCount(next);
         localStorage.setItem('timegig_sub_count', next.toString());
+        await updateDoc(doc(db, 'users', userId), {
+          subscriptionActive: true,
+        });
+        setSubscriptionActive(true);
       }
       setConfirmed(true);
       soundManager.playSuccessChime('subscription');
@@ -238,7 +263,7 @@ export default function TenantPortalModal({
           {/* Option 2: User Subscription (Credit Card Shaped Box - White) */}
           <button
             type="button"
-            disabled={isSubFull}
+            disabled={isSubFull || subscriptionActive}
             onClick={() => handleSelect('subscription')}
             className={`w-full text-left p-5 rounded-[24px] transition-all duration-300 relative group flex flex-col justify-between aspect-[1.7/1] sm:aspect-[1.9/1] transform ${
               isSubFull

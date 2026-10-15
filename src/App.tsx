@@ -413,6 +413,10 @@ export default function App() {
               avatar: data.avatar || currentUser.photoURL || prev.avatar,
               idDocName: data.idDocName ?? prev.idDocName,
             }));
+            if (!data.profileCompleted) {
+              setActiveTab('profile');
+              setIsCompletingProfileAfterRegister(true);
+            }
           } else {
             setProfile((prev) => ({
               ...prev,
@@ -515,6 +519,7 @@ export default function App() {
           email: profile.email || auth.currentUser.email || '',
           avatar: profile.avatar || '',
           idDocName: profile.idDocName || '',
+          profileCompleted: true,
           updatedAt: serverTimestamp(),
         }, { merge: true });
         showToast('Profile saved and synced to your cloud account! ☁️');
@@ -2260,7 +2265,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Docked Bottom Menu Bar */}{!isCompletingProfileAfterRegister && isProfileLocked && activeTab !== 'profile' && activeTab !== 'tenantportal' && (
+      {/* Docked Bottom Menu Bar */}{isLoggedIn && !isCompletingProfileAfterRegister && (
       <nav className={`fixed bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl transition-all ${
         activeTab === 'profile' ? 'py-0.5' : ''
       }`}>
@@ -2663,6 +2668,7 @@ export default function App() {
         isOpen={activeTab === 'tenantportal'}
         onClose={() => setActiveTab(null)}
         isLoggedIn={isLoggedIn}
+        userId={auth.currentUser?.uid}
         userEmail={profile.email}
         userName={profile.fullName}
         onOpenAuthModal={() => {
