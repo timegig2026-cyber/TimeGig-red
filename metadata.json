@@ -1,0 +1,6 @@
+{
+  "name": "OpenStreetMap Explorer",
+  "description": "Full-screen OpenStreetMap viewer with real-time user geolocation, accuracy ring, reverse geocoding, search, and custom waypoints without API fees.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
