@@ -1372,7 +1372,7 @@ export default function App() {
 
       {/* Bottom Control Group: Create a GiG, Zoom, Satellite View, and Locate Me attached together (Hidden when in Seekers view) */}
       {activeTab !== 'seekers' && (
-        <div className="absolute bottom-32 right-6 z-20 flex flex-col shadow-2xl rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="absolute bottom-40 right-6 z-20 flex flex-col shadow-2xl rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 overflow-hidden">
           {/* Create a GiG small icon on top of the zoom feature */}
           <button
             type="button"
