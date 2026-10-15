@@ -23,6 +23,8 @@ import {
   LogOut,
   Sparkles,
   CheckCircle2,
+  KeyRound,
+  Settings,
 } from 'lucide-react';
 import { Coordinates, SearchResult } from './types/map';
 import {
@@ -31,6 +33,12 @@ import {
   ActiveGigAssignment,
   CancellationRecord,
 } from './types/navigation';
+import {
+  FontStyleKey,
+  FontSizeKey,
+  FONT_STYLE_OPTIONS,
+  FONT_SIZE_OPTIONS,
+} from './types/settings';
 import { reverseGeocode, searchNominatim } from './utils/geo';
 import {
   fetchNavigationRoute,
@@ -42,6 +50,7 @@ import {
   safeLoadProfile,
   safeSaveProfile,
 } from './utils/storage';
+import { soundManager } from './utils/sound';
 import { SelectGigToHireModal } from './components/SelectGigToHireModal';
 import { HiringWaitingModal } from './components/HiringWaitingModal';
 import { ApplyingWaitingModal } from './components/ApplyingWaitingModal';
@@ -50,6 +59,8 @@ import { CancelGigModal } from './components/CancelGigModal';
 import { GigCompletedModal } from './components/GigCompletedModal';
 import { GigCancelledAlertModal } from './components/GigCancelledAlertModal';
 import AuthModal from './components/AuthModal';
+import TenantPortalModal from './components/TenantPortalModal';
+import SettingsModal from './components/SettingsModal';
 import {
   auth,
   db,
@@ -163,8 +174,35 @@ export default function App() {
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
 
-  // Bottom Menu Active Tab ('seekers' | 'gigs' | 'profile' | null)
-  const [activeTab, setActiveTab] = useState<'seekers' | 'gigs' | 'profile' | null>('seekers');
+  // Bottom Menu Active Tab ('seekers' | 'gigs' | 'profile' | 'tenantportal' | 'settings' | null)
+  const [activeTab, setActiveTab] = useState<'seekers' | 'gigs' | 'profile' | 'tenantportal' | 'settings' | null>('seekers');
+
+  // Typography state (Font Style and Font Size Scaling)
+  const [fontStyle, setFontStyle] = useState<FontStyleKey>(() => {
+    return safeLoadProfile<FontStyleKey>('app_font_style', 'sans');
+  });
+  const [fontSize, setFontSize] = useState<FontSizeKey>(() => {
+    return safeLoadProfile<FontSizeKey>('app_font_size', 'md');
+  });
+
+  // Apply Typography Preferences to document and body
+  useEffect(() => {
+    const selectedFont = FONT_STYLE_OPTIONS.find((f) => f.id === fontStyle) || FONT_STYLE_OPTIONS[0];
+    const selectedSize = FONT_SIZE_OPTIONS.find((s) => s.id === fontSize) || FONT_SIZE_OPTIONS[1];
+
+    document.documentElement.style.fontFamily = selectedFont.fontFamily;
+    document.body.style.fontFamily = selectedFont.fontFamily;
+    document.documentElement.style.fontSize = selectedSize.htmlFontSize;
+
+    safeSaveProfile('app_font_style', fontStyle);
+    safeSaveProfile('app_font_size', fontSize);
+  }, [fontStyle, fontSize]);
+
+  const handleResetTypography = () => {
+    setFontStyle('sans');
+    setFontSize('md');
+    showToast('Typography reset to default (Modern Sans, 100%).');
+  };
 
   // Interactive state
   const [seekers] = useState<Seeker[]>(INITIAL_SEEKERS);
@@ -426,6 +464,7 @@ export default function App() {
 
   // Save profile & synchronize with Firestore
   const handleSaveProfile = async () => {
+    soundManager.playSuccessChime('profile');
     setIsProfileLocked(true);
     setIsCompletingProfileAfterRegister(false);
     showToast('Profile saved and locked successfully!');
@@ -720,17 +759,19 @@ export default function App() {
     };
   }, [userCoords !== null]);
 
-  // 4. Update User Exact Location Marker & Accuracy Circle (Only when actual coordinates exist)
+  // 4. Update User Exact Location Marker & Accuracy Circle (Only when actual coordinates exist and user has not posted a gig)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    if (!userCoords) {
+    const hasUserGig = gigs.some((g) => g.postedBy === 'me');
+
+    if (!userCoords || hasUserGig) {
       if (userMarkerRef.current) {
         map.removeLayer(userMarkerRef.current);
         userMarkerRef.current = null;
       }
-      if (accuracyCircleRef.current) {
+      if (accuracyCircleRef.current && !userCoords) {
         map.removeLayer(accuracyCircleRef.current);
         accuracyCircleRef.current = null;
       }
@@ -816,7 +857,7 @@ export default function App() {
       userMarkerRef.current.setIcon(userIcon);
       userMarkerRef.current.setPopupContent(popupHtml);
     }
-  }, [userCoords, accuracy, heading, profile.avatar, profile.fullName, profile.bio, profile.location, profile.province]);
+  }, [userCoords, accuracy, heading, profile.avatar, profile.fullName, profile.bio, profile.location, profile.province, gigs]);
 
   // 5. Render Online Seekers on Map
   useEffect(() => {
@@ -1078,7 +1119,7 @@ export default function App() {
       category: gigCategory,
       coords: postCoords,
       description: gigDescription.trim(),
-      postedBy: profile.fullName || 'You',
+      postedBy: 'me',
     };
 
     setGigs((prev) => [newGig, ...prev]);
@@ -1383,7 +1424,10 @@ export default function App() {
   };
 
   return (
-    <main className="relative w-screen h-screen overflow-hidden m-0 p-0 font-sans bg-slate-950 text-slate-900 dark:text-slate-100">
+    <main
+      style={{ fontFamily: FONT_STYLE_OPTIONS.find((f) => f.id === fontStyle)?.fontFamily }}
+      className="relative w-screen h-screen overflow-hidden m-0 p-0 font-sans bg-slate-950 text-slate-900 dark:text-slate-100"
+    >
       {/* Full-Screen OpenStreetMap Background Wallpaper */}
       <div
         ref={mapElementRef}
@@ -1392,8 +1436,47 @@ export default function App() {
         style={{ touchAction: 'none' }}
       />
 
-      {/* Blur Overlay when Seekers or Profile feature is active */}
-      {(activeTab === 'seekers' || activeTab === 'profile') && (
+      {/* Unauthenticated Login Gate / Wall */}
+      {!isLoggedIn && (
+        <div className="absolute inset-0 z-50 backdrop-blur-xl bg-slate-950/80 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="w-full max-w-md bg-slate-900/95 border border-slate-800 rounded-3xl shadow-2xl p-8 text-center space-y-6">
+            <div className="w-16 h-16 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-3xl mx-auto flex items-center justify-center shadow-lg shadow-orange-500/30">
+              <Flame className="w-8 h-8 fill-white text-white" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-extrabold text-white">Welcome to TimeGiG</h2>
+              <p className="text-xs text-slate-400">
+                You must be logged in to use TimeGiG, view map seekers, and manage gigs. Please log in or register your account.
+              </p>
+            </div>
+            <div className="space-y-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalInitialMode('login');
+                  setIsAuthModalOpen(true);
+                }}
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-2xl shadow-lg shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Lock className="w-4 h-4" /> Log In to Your Account
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalInitialMode('register');
+                  setIsAuthModalOpen(true);
+                }}
+                className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-2xl border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-amber-400" /> Register New Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Blur Overlay when Seekers, Profile, Tenantportal, or Settings feature is active */}
+      {(activeTab === 'seekers' || activeTab === 'profile' || activeTab === 'tenantportal' || activeTab === 'settings') && (
         <div className="absolute inset-0 z-10 backdrop-blur-md bg-slate-950/40 transition-all pointer-events-none" />
       )}
 
@@ -1420,8 +1503,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Search Bar & User Profile / Login Button (Hidden in Profile feature) */}
-      {activeTab !== 'profile' && (
+      {/* Top Search Bar & User Profile / Login Button (Hidden in Profile, Tenantportal, or Settings feature) */}
+      {activeTab !== 'profile' && activeTab !== 'tenantportal' && activeTab !== 'settings' && (
         <div className="absolute top-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[500px] z-30">
           <div className="flex items-center gap-2.5">
             <div className="relative flex-1 flex items-center shadow-2xl rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 transition-all focus-within:ring-2 focus-within:ring-blue-500">
@@ -1580,8 +1663,8 @@ export default function App() {
             aria-label="Create a GiG"
           >
             <div className="relative flex items-center justify-center">
-              <Flame className="w-4 h-4 fill-orange-500 group-hover:scale-110 transition-transform" />
-              <span className="absolute -top-1 -right-1.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-orange-600 text-[8px] font-bold text-white leading-none">
+              <Flame className="w-5 h-5 fill-orange-500 group-hover:scale-110 transition-transform" />
+              <span className="absolute -top-1 -right-1.5 flex h-3 w-3 items-center justify-center rounded-full bg-orange-600 text-[8px] font-bold text-white leading-none">
                 +
               </span>
             </div>
@@ -2098,13 +2181,38 @@ export default function App() {
 
           <button
             type="button"
-            onClick={() => setActiveTab(activeTab === 'gigs' ? null : 'gigs')}
+            onClick={() => setActiveTab(activeTab === 'tenantportal' ? null : 'tenantportal')}
             className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
-              activeTab === 'gigs' ? 'text-orange-500 dark:text-orange-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              activeTab === 'tenantportal' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
+            title="Portal"
+            aria-label="Portal"
           >
-            <Flame className="w-7 h-7" />
-            <span className="text-[11px]">GiGs</span>
+            <KeyRound className="w-5 h-5" />
+            <span className="text-[11px]">Portal</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab(activeTab === 'gigs' ? null : 'gigs')}
+            className={`flex flex-col items-center -mt-3 outline-none focus:outline-none transition-all duration-200 group ${
+              activeTab === 'gigs'
+                ? 'text-orange-500 dark:text-orange-400 font-bold scale-105'
+                : 'text-slate-600 dark:text-slate-400 hover:text-orange-500 dark:hover:text-orange-400'
+            }`}
+            title="GiGs"
+            aria-label="GiGs"
+          >
+            <div
+              className={`p-2 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+                activeTab === 'gigs'
+                  ? 'bg-orange-500/15 dark:bg-orange-500/25 ring-2 ring-orange-500/50 shadow-lg shadow-orange-500/25'
+                  : 'group-hover:bg-orange-50 dark:group-hover:bg-slate-800'
+              }`}
+            >
+              <Flame className="w-10 h-10 fill-orange-500 text-orange-500 dark:fill-orange-400 dark:text-orange-400 drop-shadow-sm transition-transform group-hover:scale-110" />
+            </div>
+            <span className="text-xs font-bold tracking-tight -mt-0.5">GiGs</span>
           </button>
 
           {!isLoggedIn ? (
@@ -2144,11 +2252,17 @@ export default function App() {
 
           <button
             type="button"
-            onClick={() => setActiveTab('profile')}
-            className="flex flex-col items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+            onClick={() => setActiveTab(activeTab === 'settings' ? null : 'settings')}
+            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+              activeTab === 'settings'
+                ? 'text-blue-600 dark:text-blue-400 font-semibold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+            title="Settings"
+            aria-label="Settings"
           >
             <div className="w-5 h-5 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <Settings className="w-5 h-5" />
             </div>
             <span className="text-[11px]">Settings</span>
           </button>
@@ -2444,6 +2558,47 @@ export default function App() {
         initialMode={authModalInitialMode}
         onRegistrationComplete={handleRegistrationComplete}
         onLoginSuccess={handleLoginSuccess}
+      />
+
+      {/* Tenant Portal Modal */}
+      <TenantPortalModal
+        isOpen={activeTab === 'tenantportal'}
+        onClose={() => setActiveTab(null)}
+        isLoggedIn={isLoggedIn}
+        userEmail={profile.email}
+        userName={profile.fullName}
+        onOpenAuthModal={() => {
+          setAuthModalInitialMode('login');
+          setIsAuthModalOpen(true);
+        }}
+      />
+
+      {/* Settings Modal: Font Style, Font Size Scaling & Account Logout */}
+      <SettingsModal
+        isOpen={activeTab === 'settings'}
+        onClose={() => setActiveTab(null)}
+        fontStyle={fontStyle}
+        onChangeFontStyle={(style) => {
+          setFontStyle(style);
+          const name = FONT_STYLE_OPTIONS.find((f) => f.id === style)?.name || style;
+          showToast(`Font updated to ${name}`);
+        }}
+        fontSize={fontSize}
+        onChangeFontSize={(size) => {
+          setFontSize(size);
+          const name = FONT_SIZE_OPTIONS.find((s) => s.id === size)?.name || size;
+          showToast(`Font size scaled to ${name}`);
+        }}
+        onResetTypography={handleResetTypography}
+        isLoggedIn={isLoggedIn}
+        userEmail={profile.email}
+        userName={profile.fullName}
+        userAvatar={profile.avatar}
+        onLogout={handleSignOut}
+        onOpenLogin={() => {
+          setAuthModalInitialMode('login');
+          setIsAuthModalOpen(true);
+        }}
       />
 
       {/* Toast Notification */}

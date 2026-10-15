@@ -29,6 +29,7 @@ import {
   OperationType,
 } from '../firebase';
 import TermsAndConditionsModal from './TermsAndConditionsModal';
+import { soundManager } from '../utils/sound';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -164,6 +165,7 @@ export default function AuthModal({
       }
 
       // 3. Trigger Congratulations State
+      soundManager.playSuccessChime('signup');
       setRegisteredEmail(user.email || email.trim());
       setRegisteredUid(user.uid);
       setIsRegisteredSuccess(true);
@@ -204,6 +206,7 @@ export default function AuthModal({
         // Ignore read errors gracefully
       }
 
+      soundManager.playSuccessChime('login');
       onLoginSuccess(user.email || email.trim(), fetchedName);
       handleClose();
     } catch (err: any) {
@@ -257,12 +260,14 @@ export default function AuthModal({
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        soundManager.playSuccessChime('signup');
         setRegisteredEmail(user.email || '');
         setRegisteredUid(user.uid);
         setIsRegisteredSuccess(true);
       } else {
         // Existing user: preserve their profile, do not overwrite
         const existingData = snap.data();
+        soundManager.playSuccessChime('login');
         onLoginSuccess(user.email || '', existingData?.fullName || user.displayName || '');
         handleClose();
       }
