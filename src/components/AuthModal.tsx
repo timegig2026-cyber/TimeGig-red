@@ -144,6 +144,7 @@ export default function AuthModal({
 
       // 2. Persist initial user profile in Firestore
       const userDocRef = doc(db, 'users', user.uid);
+      const refCode = localStorage.getItem('referral_code');
       try {
         await setDoc(userDocRef, {
           id: user.uid,
@@ -156,9 +157,13 @@ export default function AuthModal({
           contact: '',
           avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
           idDocName: '',
+          referredBy: refCode || null,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        if (refCode) {
+            localStorage.removeItem('referral_code');
+        }
       } catch (firestoreErr) {
         // Fallback or log firestore error
         console.warn('Firestore initial doc write warning:', firestoreErr);
@@ -246,6 +251,7 @@ export default function AuthModal({
 
       if (!snap.exists()) {
         // New user: create their own profile using Firebase UID
+        const refCode = localStorage.getItem('referral_code');
         await setDoc(userDocRef, {
           id: user.uid,
           email: user.email || '',
@@ -257,9 +263,13 @@ export default function AuthModal({
           contact: '',
           avatar: user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
           idDocName: '',
+          referredBy: refCode || null,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+        if (refCode) {
+            localStorage.removeItem('referral_code');
+        }
         soundManager.playSuccessChime('signup');
         setRegisteredEmail(user.email || '');
         setRegisteredUid(user.uid);

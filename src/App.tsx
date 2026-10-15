@@ -242,6 +242,17 @@ export default function App() {
   useEffect(() => {
     localStorage.removeItem('user_posted_gigs');
     setGigs([]);
+
+    // Check for referral link
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get('ref');
+    if (refCode) {
+      console.log('Referral code detected:', refCode);
+      setIsAuthModalOpen(true);
+      setAuthModalInitialMode('register');
+      // Optionally store in localStorage for later use
+      localStorage.setItem('referral_code', refCode);
+    }
   }, []);
 
   // Create a GiG form state
