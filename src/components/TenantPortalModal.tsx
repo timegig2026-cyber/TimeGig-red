@@ -19,24 +19,28 @@ const MAX_SUBSCRIPTIONS = 50;
 export default function TenantPortalModal({
   isOpen,
   onClose,
+  userEmail,
 }: TenantPortalModalProps) {
   const [selectedOption, setSelectedOption] = useState<SubscriptionOption>(null);
   const [confirmed, setConfirmed] = useState<boolean>(false);
   const [showInfo, setShowInfo] = useState<boolean>(false);
 
   // Live capacities stored in localStorage
-  const [tenantCount, setTenantCount] = useState<number>(8);
-  const [subscriptionCount, setSubscriptionCount] = useState<number>(42);
+  const [tenantCount, setTenantCount] = useState<number>(0);
+  const [subscriptionCount, setSubscriptionCount] = useState<number>(0);
 
   useEffect(() => {
     if (isOpen) {
       try {
-        const savedTenants = localStorage.getItem('timegig_tenant_count');
-        const savedSubs = localStorage.getItem('timegig_sub_count');
-        if (savedTenants !== null) setTenantCount(parseInt(savedTenants, 10));
-        if (savedSubs !== null) setSubscriptionCount(parseInt(savedSubs, 10));
+        // Force reset to 0 as requested
+        localStorage.setItem('timegig_tenant_count', '0');
+        localStorage.setItem('timegig_sub_count', '0');
+        setTenantCount(0);
+        setSubscriptionCount(0);
       } catch (err) {
-        console.warn('Failed to load counts', err);
+        console.warn('Failed to reset counts', err);
+        setTenantCount(0);
+        setSubscriptionCount(0);
       }
     }
   }, [isOpen]);
@@ -55,10 +59,9 @@ export default function TenantPortalModal({
     if (!selectedOption) return;
 
     try {
-      if (selectedOption === 'tenant' && tenantCount < MAX_TENANTS) {
-        const next = tenantCount + 1;
-        setTenantCount(next);
-        localStorage.setItem('timegig_tenant_count', next.toString());
+      // Tenant activation does not increment the count
+      if (selectedOption === 'tenant') {
+        // No-op for counter
       } else if (selectedOption === 'subscription' && subscriptionCount < MAX_SUBSCRIPTIONS) {
         const next = subscriptionCount + 1;
         setSubscriptionCount(next);
@@ -312,8 +315,14 @@ export default function TenantPortalModal({
         </div>
 
         {confirmed && (
-          <div className="relative z-10 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-500/50 text-emerald-800 dark:text-emerald-300 text-xs font-bold text-center shadow-md animate-fadeIn">
-            🎉 Successfully activated <strong>{selectedOption === 'tenant' ? 'Become a Tenant (R299.99/mo)' : 'User Subscription'}</strong>! ({selectedOption === 'tenant' ? `${tenantCount}/${MAX_TENANTS}` : `${subscriptionCount}/${MAX_SUBSCRIPTIONS}`} slots filled)
+          <div className="relative z-10 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-500/50 text-emerald-800 dark:text-emerald-300 text-xs font-bold text-center shadow-md animate-fadeIn space-y-2">
+            <p>🎉 Successfully activated <strong>{selectedOption === 'tenant' ? 'Become a Tenant (R299.99/mo)' : 'User Subscription'}</strong>!</p>
+            {selectedOption === 'tenant' && (
+              <div className="mt-2 p-2 bg-white/50 dark:bg-emerald-900/30 rounded-lg border border-emerald-200/50">
+                <p className="text-[10px] uppercase tracking-wider mb-1">Your Referral Link:</p>
+                <code className="text-[11px] font-mono break-all">{`${window.location.origin}/register?ref=${userEmail || 'unknown'}`}</code>
+              </div>
+            )}
           </div>
         )}
 

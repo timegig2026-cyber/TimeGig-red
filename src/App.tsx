@@ -457,7 +457,24 @@ export default function App() {
       setIsLoggedIn(false);
       setIsCompletingProfileAfterRegister(false);
       setProfile(DEFAULT_PROFILE);
-      showToast('You have been signed out.');
+      
+      // Clear IndexedDB
+      try {
+        const dbs = await indexedDB.databases();
+        dbs.forEach(db => {
+          if (db.name === 'timegig_storage_db') {
+            indexedDB.deleteDatabase(db.name!);
+          }
+        });
+      } catch (e) {
+        console.error('Failed to clear local storage', e);
+      }
+
+      // Reset tenant and subscription counts
+      localStorage.removeItem('timegig_tenant_count');
+      localStorage.removeItem('timegig_sub_count');
+      
+      showToast('You have been signed out and data reset.');
     } catch (err) {
       console.error('Sign out error:', err);
     }
