@@ -499,12 +499,13 @@ export default function App() {
 
   // Center map on coordinates
 
-  const isValidCoord = (c: { lat: number; lng: number }) => !isNaN(c.lat) && !isNaN(c.lng);
+  const isCoordsValid = (c: any) => 
+    c && 
+    typeof c.lat === 'number' && Number.isFinite(c.lat) && c.lat >= -90 && c.lat <= 90 &&
+    typeof c.lng === 'number' && Number.isFinite(c.lng) && c.lng >= -180 && c.lng <= 180;
   
   const flyToCoords = useCallback((coords: Coordinates, zoom = 16) => {
-    if (mapRef.current && coords && 
-        typeof coords.lat === 'number' && !isNaN(coords.lat) && isFinite(coords.lat) &&
-        typeof coords.lng === 'number' && !isNaN(coords.lng) && isFinite(coords.lng)) {
+    if (mapRef.current && isCoordsValid(coords)) {
       mapRef.current.flyTo([coords.lat, coords.lng], zoom, {
         duration: 1.2,
       });
@@ -571,7 +572,7 @@ export default function App() {
 
   const handleFocusRoute = useCallback(() => {
     if (!mapRef.current || !activeAssignment || !activeAssignment.routeCoords.length) return;
-    const validBounds = activeAssignment.routeCoords.filter((c) => isValidCoord({ lat: c[0], lng: c[1] }));
+    const validBounds = activeAssignment.routeCoords.filter((c) => isCoordsValid({ lat: c[0], lng: c[1] }));
     if (validBounds.length > 0) {
       mapRef.current.fitBounds(L.latLngBounds(validBounds), {
         padding: [90, 90],
@@ -639,7 +640,7 @@ export default function App() {
         setLocationError(null);
 
         if (mapRef.current) {
-        if (isValidCoord(coords)) mapRef.current.flyTo([coords.lat, coords.lng], 15, { duration: 1.2 });
+        if (isCoordsValid(coords)) mapRef.current.flyTo([coords.lat, coords.lng], 15, { duration: 1.2 });
         }
       },
       (error) => {
@@ -798,7 +799,7 @@ export default function App() {
         fillOpacity: 0.15,
       }).addTo(map);
     } else {
-      if (isValidCoord({ lat, lng })) accuracyCircleRef.current.setLatLng([lat, lng]);
+      if (isCoordsValid({ lat, lng })) accuracyCircleRef.current.setLatLng([lat, lng]);
       accuracyCircleRef.current.setRadius(currentAccuracy);
     }
 
@@ -860,7 +861,7 @@ export default function App() {
       marker.bindPopup(popupHtml);
       userMarkerRef.current = marker;
     } else {
-      if (isValidCoord({ lat, lng })) userMarkerRef.current.setLatLng([lat, lng]);
+      if (isCoordsValid({ lat, lng })) userMarkerRef.current.setLatLng([lat, lng]);
       userMarkerRef.current.setIcon(userIcon);
       userMarkerRef.current.setPopupContent(popupHtml);
     }
@@ -1082,7 +1083,7 @@ export default function App() {
 
     // Fit map bounds to show complete navigation path
     if (map) {
-      const validBounds = routeCoords.filter((c) => isValidCoord({ lat: c[0], lng: c[1] }));
+      const validBounds = routeCoords.filter((c) => isCoordsValid({ lat: c[0], lng: c[1] }));
       if (validBounds.length > 0) {
         map.fitBounds(L.latLngBounds(validBounds), {
           padding: [90, 90],
