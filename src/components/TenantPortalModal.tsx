@@ -324,7 +324,7 @@ export default function TenantPortalModal({
             {selectedOption === 'tenant' && (
               <div className="mt-2 p-2 bg-white/50 dark:bg-emerald-900/30 rounded-lg border border-emerald-200/50">
                 <p className="text-[10px] uppercase tracking-wider mb-1">Your Referral Link:</p>
-                <code className="text-[11px] font-mono break-all">{`${window.location.origin}/register?ref=${userEmail || 'unknown'}`}</code>
+                <code className="text-[11px] font-mono break-all">{`${window.location.protocol}//${window.location.host}/?ref=${userEmail || 'unknown'}`}</code>
               </div>
             )}
           </div>
