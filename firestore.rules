@@ -1,0 +1,69 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUser(data, userId) {
+      return data.id == userId &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
+             data.termsAccepted == true &&
+             (!('fullName' in data) || (data.fullName is string && data.fullName.size() <= 100)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
+             (!('location' in data) || (data.location is string && data.location.size() <= 100)) &&
+             (!('province' in data) || (data.province is string && data.province.size() <= 100)) &&
+             (!('contact' in data) || (data.contact is string && data.contact.size() <= 50)) &&
+             (!('avatar' in data) || (data.avatar is string && data.avatar.size() <= 2048)) &&
+             (!('idDocName' in data) || (data.idDocName is string && data.idDocName.size() <= 200));
+    }
+
+    // Health / connection test doc
+    match /test/{docId} {
+      allow get: if true;
+    }
+
+    // User profile document rules
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUser(incoming(), userId) &&
+                       incoming().keys().hasAll(['id', 'email', 'termsAccepted']);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUser(incoming(), userId) &&
+                       incoming().id == existing().id &&
+                       incoming().email == existing().email &&
+                       incoming().termsAccepted == existing().termsAccepted;
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+    }
+  }
+}

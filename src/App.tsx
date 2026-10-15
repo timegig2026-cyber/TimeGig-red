@@ -20,6 +20,9 @@ import {
   Lock,
   Unlock,
   CheckCircle,
+  LogOut,
+  Sparkles,
+  CheckCircle2,
 } from 'lucide-react';
 import { Coordinates, SearchResult } from './types/map';
 import {
@@ -46,6 +49,20 @@ import { NavigationHud } from './components/NavigationHud';
 import { CancelGigModal } from './components/CancelGigModal';
 import { GigCompletedModal } from './components/GigCompletedModal';
 import { GigCancelledAlertModal } from './components/GigCancelledAlertModal';
+import AuthModal from './components/AuthModal';
+import {
+  auth,
+  db,
+  signOut,
+  onAuthStateChanged,
+  testFirestoreConnection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  serverTimestamp,
+  getRedirectResult,
+} from './firebase';
 
 interface SocialLink {
   platform: string;
@@ -69,17 +86,14 @@ const CURRENT_USER_ID = 'current_user';
 
 const DEFAULT_PROFILE: ProfileState = {
   avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-  idDocName: 'gov_id_verification_scan.pdf',
-  fullName: 'Alex Morgan',
-  bio: 'Senior Field Explorer',
-  location: 'San Francisco',
-  province: 'California',
-  contact: '+1 (555) 234-5678',
-  email: 'alex.morgan@explorer.org',
-  socials: [
-    { platform: 'Twitter / X', url: 'https://twitter.com/alexmorgan' },
-    { platform: 'LinkedIn', url: 'https://linkedin.com/in/alexmorgan' },
-  ],
+  idDocName: '',
+  fullName: '',
+  bio: '',
+  location: '',
+  province: '',
+  contact: '',
+  email: '',
+  socials: [],
   lastAvatarUpdate: 0,
 };
 
@@ -176,6 +190,11 @@ export default function App() {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState<boolean>(false);
   const [isCompletedModalOpen, setIsCompletedModalOpen] = useState<boolean>(false);
   const [cancellationAlert, setCancellationAlert] = useState<CancellationRecord | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalInitialMode, setAuthModalInitialMode] = useState<'login' | 'register'>('register');
+  const [welcomeBannerMessage, setWelcomeBannerMessage] = useState<string | null>(null);
+  const [isCompletingProfileAfterRegister, setIsCompletingProfileAfterRegister] = useState<boolean>(false);
 
   useEffect(() => {
     safeSaveProfile('active_gig_assignment', activeAssignment);
@@ -234,29 +253,6 @@ export default function App() {
 
   // Location / Area autocomplete suggestions for Create a GiG
   const [gigLocationSuggestions, setGigLocationSuggestions] = useState<SearchResult[]>([]);
-              <div className="relative">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  GiG Image (Optional)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => setGigImage(reader.result as string);
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                    className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
-                  />
-                  {gigImage && (
-                    <img src={gigImage} alt="Preview" className="w-10 h-10 rounded-lg object-cover" />
-                  )}
-                </div>
-              </div>
   const [isSearchingGigLoc, setIsSearchingGigLoc] = useState<boolean>(false);
   const [showGigLocDropdown, setShowGigLocDropdown] = useState<boolean>(false);
   const [gigCustomCoords, setGigCustomCoords] = useState<Coordinates | null>(null);
@@ -301,12 +297,162 @@ export default function App() {
       ...profile,
       avatar: profile.avatar.startsWith('data:') ? '' : profile.avatar,
     };
-    safeSaveProfile(CURRENT_USER_ID, profileToStore);
+    const storageKey = auth.currentUser ? `user_profile_${auth.currentUser.uid}` : CURRENT_USER_ID;
+    safeSaveProfile(storageKey, profileToStore);
   }, [profile]);
 
   useEffect(() => {
-    safeSaveProfile(`${CURRENT_USER_ID}_locked`, isProfileLocked);
+    const storageKey = auth.currentUser ? `user_locked_${auth.currentUser.uid}` : `${CURRENT_USER_ID}_locked`;
+    safeSaveProfile(storageKey, isProfileLocked);
   }, [isProfileLocked]);
+
+  // Listen for Firebase Auth changes and sync Firestore profile
+  useEffect(() => {
+    testFirestoreConnection();
+
+    // Check for redirect result from Google signInWithRedirect fallback
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result && result.user) {
+          const user = result.user;
+          const userRef = doc(db, 'users', user.uid);
+          const snap = await getDoc(userRef);
+          if (!snap.exists()) {
+            await setDoc(userRef, {
+              id: user.uid,
+              email: user.email || '',
+              termsAccepted: true,
+              fullName: user.displayName || '',
+              bio: 'Community Explorer & Gig Worker',
+              location: '',
+              province: '',
+              contact: '',
+              avatar: user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+              idDocName: '',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+            handleRegistrationComplete(user.email || '', user.uid);
+          } else {
+            const data = snap.data();
+            handleLoginSuccess(user.email || '', data?.fullName || user.displayName || '');
+          }
+        }
+      })
+      .catch((err) => {
+        console.error('Redirect sign-in error:', err);
+      });
+
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setIsLoggedIn(true);
+        try {
+          const userRef = doc(db, 'users', currentUser.uid);
+          const docSnap = await getDoc(userRef);
+          if (docSnap.exists()) {
+            // Load existing user profile without overwriting
+            const data = docSnap.data();
+            setProfile((prev) => ({
+              ...prev,
+              email: currentUser.email || prev.email,
+              fullName: data.fullName ?? prev.fullName,
+              bio: data.bio ?? prev.bio,
+              location: data.location ?? prev.location,
+              province: data.province ?? prev.province,
+              contact: data.contact ?? prev.contact,
+              avatar: data.avatar || currentUser.photoURL || prev.avatar,
+              idDocName: data.idDocName ?? prev.idDocName,
+            }));
+          } else {
+            setProfile((prev) => ({
+              ...prev,
+              email: currentUser.email || prev.email,
+              fullName: currentUser.displayName || prev.fullName,
+              avatar: currentUser.photoURL || prev.avatar,
+            }));
+          }
+        } catch (err) {
+          console.warn('Could not load user profile from Firestore:', err);
+        }
+      } else {
+        setIsLoggedIn(false);
+        setProfile(DEFAULT_PROFILE);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Handle completion of registration -> congratulate and direct user to complete profile
+  const handleRegistrationComplete = (userEmail: string, userId: string) => {
+    setIsLoggedIn(true);
+    setProfile((prev) => ({
+      ...prev,
+      email: userEmail,
+      fullName: prev.fullName || '',
+      bio: prev.bio || 'Community Explorer & Gig Worker',
+    }));
+    setActiveTab('profile');
+    setIsProfileLocked(false);
+    setIsCompletingProfileAfterRegister(true);
+    showToast('🎉 Welcome to GiGs! Please complete your profile details below.');
+  };
+
+  // Handle successful login of existing registered user -> welcome user back
+  const handleLoginSuccess = (userEmail: string, userName?: string) => {
+    setIsLoggedIn(true);
+    setIsCompletingProfileAfterRegister(false);
+    const greetingName = userName && userName.trim() ? userName.trim() : (userEmail ? userEmail.split('@')[0] : 'Explorer');
+    const welcomeMsg = `Welcome back, ${greetingName}! 👋`;
+    setWelcomeBannerMessage(welcomeMsg);
+    showToast(welcomeMsg);
+    setTimeout(() => {
+      setWelcomeBannerMessage(null);
+    }, 6000);
+  };
+
+  // Handle Sign Out
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setIsLoggedIn(false);
+      setIsCompletingProfileAfterRegister(false);
+      setProfile(DEFAULT_PROFILE);
+      showToast('You have been signed out.');
+    } catch (err) {
+      console.error('Sign out error:', err);
+    }
+  };
+
+  // Save profile & synchronize with Firestore
+  const handleSaveProfile = async () => {
+    setIsProfileLocked(true);
+    setIsCompletingProfileAfterRegister(false);
+    showToast('Profile saved and locked successfully!');
+
+    if (auth.currentUser) {
+      const uid = auth.currentUser.uid;
+      safeSaveProfile(`user_profile_${uid}`, profile);
+      safeSaveProfile(`user_locked_${uid}`, true);
+      try {
+        const userRef = doc(db, 'users', uid);
+        await updateDoc(userRef, {
+          fullName: profile.fullName || '',
+          bio: profile.bio || '',
+          location: profile.location || '',
+          province: profile.province || '',
+          contact: profile.contact || '',
+          email: profile.email || auth.currentUser.email || '',
+          avatar: profile.avatar || '',
+          idDocName: profile.idDocName || '',
+          updatedAt: serverTimestamp(),
+        });
+        showToast('Profile saved and synced to your cloud account! ☁️');
+      } catch (err) {
+        console.warn('Firestore profile update sync warning:', err);
+      }
+    }
+  };
 
 
   // Center map on coordinates
@@ -1251,7 +1397,30 @@ export default function App() {
         <div className="absolute inset-0 z-10 backdrop-blur-md bg-slate-950/40 transition-all pointer-events-none" />
       )}
 
-      {/* Top Search Bar & User Profile Picture Logo (Hidden in Profile feature) */}
+      {/* Welcome Back Notification Banner when registered user logs in */}
+      {welcomeBannerMessage && (
+        <div className="fixed top-5 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[480px] z-50 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-3.5 rounded-2xl shadow-2xl border border-blue-400/40 flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
+              <Sparkles className="w-5 h-5 text-amber-300" />
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-xs md:text-sm font-bold truncate">{welcomeBannerMessage}</h4>
+              <p className="text-[11px] text-blue-100">Welcome back to GiGs! You are successfully signed in.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWelcomeBannerMessage(null)}
+            className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white shrink-0"
+            title="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Top Search Bar & User Profile / Login Button (Hidden in Profile feature) */}
       {activeTab !== 'profile' && (
         <div className="absolute top-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[500px] z-30">
           <div className="flex items-center gap-2.5">
@@ -1289,30 +1458,45 @@ export default function App() {
               )}
             </div>
 
-            {/* User Profile Picture Logo Show on Map */}
-            <button
-              type="button"
-              onClick={() => {
-                if (userCoords) {
-                  flyToCoords(userCoords, 16);
-                  showToast(`Centered on your location, ${profile.fullName}!`);
-                } else {
-                  setActiveTab('profile');
-                }
-              }}
-              title={userCoords ? 'Center on your location' : 'View Profile'}
-              className="shrink-0 relative flex items-center justify-center p-0.5 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-2xl hover:scale-105 active:scale-95 transition-all cursor-pointer"
-            >
-              <img
-                src={profile.avatar || DEFAULT_PROFILE.avatar}
-                alt={profile.fullName}
-                className="w-10 h-10 rounded-full object-cover border-2 border-blue-600 shadow-sm"
-              />
-              <span
-                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900"
-                title="Online"
-              />
-            </button>
+            {/* User Profile Picture Logo or Login Button */}
+            {isLoggedIn ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (userCoords) {
+                    flyToCoords(userCoords, 16);
+                    showToast(`Centered on your location, ${profile.fullName}!`);
+                  } else {
+                    setActiveTab('profile');
+                  }
+                }}
+                title={userCoords ? 'Center on your location' : 'View Profile'}
+                className="shrink-0 relative flex items-center justify-center p-0.5 rounded-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-2xl hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              >
+                <img
+                  src={profile.avatar || DEFAULT_PROFILE.avatar}
+                  alt={profile.fullName}
+                  className="w-10 h-10 rounded-full object-cover border-2 border-blue-600 shadow-sm"
+                />
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900"
+                  title="Online"
+                />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalInitialMode('login');
+                  setIsAuthModalOpen(true);
+                }}
+                title="Log In / Sign Up"
+                className="shrink-0 flex items-center gap-1.5 px-3.5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-lg shadow-blue-500/25 active:scale-95 transition-all cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Log In</span>
+              </button>
+            )}
           </div>
 
           {/* Autocomplete Results Dropdown (Only for worldwide search outside Seekers tab) */}
@@ -1546,29 +1730,61 @@ export default function App() {
               <MapPin className="w-3.5 h-3.5" /> {profile.location}, {profile.province}
             </div>
 
-            <div className="mt-4 flex items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               {isProfileLocked ? (
                 <button
                   type="button"
                   onClick={() => setIsProfileLocked(false)}
-                  className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
                 >
                   <Unlock className="w-3.5 h-3.5" /> Edit Profile
                 </button>
               ) : (
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsProfileLocked(true);
-                    showToast('Profile saved and locked successfully!');
-                  }}
-                  className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all"
+                  onClick={handleSaveProfile}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
                 >
                   <Lock className="w-3.5 h-3.5" /> Save Profile
                 </button>
               )}
+
+              {isLoggedIn ? (
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                  title="Sign out of your account"
+                >
+                  <LogOut className="w-3.5 h-3.5" /> Sign Out
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthModalInitialMode('login');
+                    setIsAuthModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  <Lock className="w-3.5 h-3.5" /> Log In / Register
+                </button>
+              )}
             </div>
           </div>
+
+          {/* New User Profile Completion Guidance Banner */}
+          {isCompletingProfileAfterRegister && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border-2 border-dashed border-emerald-500/50 text-slate-800 dark:text-slate-200 space-y-1.5 animate-fadeIn">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                <Sparkles className="w-4 h-4 text-emerald-500" />
+                <span>🎉 Step 2: Complete Your Explorer Profile</span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                Welcome to GiG Explorer! Your account has been registered with <strong>{profile.email}</strong>. Please fill out your <strong>Full Name</strong>, <strong>Role / Bio</strong>, <strong>Location</strong>, and <strong>Contact Phone</strong> below so clients and seekers can connect with you. When finished, click <strong>"Save Profile"</strong> above to lock in your details.
+              </p>
+            </div>
+          )}
 
           {/* Section 1: Face Selfie / Profile Picture (Once a month limit, stored in IndexedDB) */}
           <div className="space-y-2">
@@ -1891,22 +2107,52 @@ export default function App() {
             <span className="text-[11px]">GiGs</span>
           </button>
 
+          {!isLoggedIn ? (
+            <button
+              type="button"
+              onClick={() => {
+                setAuthModalInitialMode('login');
+                setIsAuthModalOpen(true);
+              }}
+              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+                isAuthModalOpen ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Lock className="w-5 h-5" />
+              <span className="text-[11px]">Login</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveTab(activeTab === 'profile' ? null : 'profile')}
+              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+                activeTab === 'profile' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <div className="relative">
+                <img
+                  src={profile.avatar || DEFAULT_PROFILE.avatar}
+                  alt={profile.fullName}
+                  className="w-5 h-5 rounded-full object-cover border border-blue-500"
+                />
+                <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white dark:border-slate-900" />
+              </div>
+              <span className="text-[11px]">Profile</span>
+            </button>
+          )}
+
+
           <button
             type="button"
-            onClick={() => setActiveTab(activeTab === 'profile' ? null : 'profile')}
-            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
-              activeTab === 'profile' ? 'text-purple-600 dark:text-purple-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+            onClick={() => setActiveTab('profile')}
+            className="flex flex-col items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
           >
-            <div className={`relative w-5 h-5 rounded-full overflow-hidden border ${activeTab === 'profile' ? 'border-purple-600 ring-2 ring-purple-400/40' : 'border-slate-300 dark:border-slate-600'}`}>
-              <img
-                src={profile.avatar || DEFAULT_PROFILE.avatar}
-                alt={profile.fullName}
-                className="w-full h-full object-cover"
-              />
+            <div className="w-5 h-5 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </div>
-            <span className="text-[11px]">Profile</span>
+            <span className="text-[11px]">Settings</span>
           </button>
+
         </div>
       </nav>
 
@@ -2190,6 +2436,15 @@ export default function App() {
           onClose={() => setCancellationAlert(null)}
         />
       )}
+
+      {/* Firebase Auth Modal: Register & Login flows with Terms Acceptance */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialMode={authModalInitialMode}
+        onRegistrationComplete={handleRegistrationComplete}
+        onLoginSuccess={handleLoginSuccess}
+      />
 
       {/* Toast Notification */}
       {toastMessage && (
