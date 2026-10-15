@@ -497,6 +497,10 @@ export default function App() {
 
   // Save profile & synchronize with Firestore
   const handleSaveProfile = async () => {
+    if (!profile.avatar || !profile.idDocName) {
+      showToast('Please upload a profile picture and ID document to complete your profile.');
+      return;
+    }
     soundManager.playSuccessChime('profile');
     setIsProfileLocked(true);
     setIsCompletingProfileAfterRegister(false);
@@ -2265,11 +2269,9 @@ export default function App() {
         </div>
       )}
 
-      {/* Docked Bottom Menu Bar */}{isLoggedIn && !isCompletingProfileAfterRegister && (
-      <nav className={`fixed bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl transition-all ${
-        activeTab === 'profile' ? 'py-0.5' : ''
-      }`}>
-        <div className={`max-w-md mx-auto flex items-center justify-around px-6 ${activeTab === 'profile' ? 'py-1' : 'py-3.5'}`}>
+      {/* Docked Bottom Menu Bar */}{isLoggedIn && !isCompletingProfileAfterRegister && activeTab !== 'profile' && (
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl transition-all">
+        <div className="max-w-md mx-auto flex items-center justify-around px-6 py-3.5">
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'seekers' ? null : 'seekers')}
