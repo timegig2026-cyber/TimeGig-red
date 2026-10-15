@@ -13,8 +13,7 @@ interface TenantPortalModalProps {
 
 type SubscriptionOption = 'tenant' | 'subscription' | null;
 
-const MAX_TENANTS = 10;
-const MAX_SUBSCRIPTIONS = 50;
+
 
 export default function TenantPortalModal({
   isOpen,
@@ -24,6 +23,11 @@ export default function TenantPortalModal({
   const [selectedOption, setSelectedOption] = useState<SubscriptionOption>(null);
   const [confirmed, setConfirmed] = useState<boolean>(false);
   const [showInfo, setShowInfo] = useState<boolean>(false);
+
+  // Dynamic limits based on user
+  const isSpecialUser = userEmail === 'timegig2026@gmail.com';
+  const MAX_TENANTS = isSpecialUser ? 1000 : 10;
+  const MAX_SUBSCRIPTIONS = isSpecialUser ? 1000 : 50;
 
   // Live capacities stored in localStorage
   const [tenantCount, setTenantCount] = useState<number>(0);
@@ -183,7 +187,7 @@ export default function TenantPortalModal({
                     ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/80 dark:text-rose-400'
                     : 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/80 border-emerald-200 dark:border-emerald-500/30'
                 }`}>
-                  {isTenantFull ? 'SOLD OUT (10/10)' : `${tenantCount}/${MAX_TENANTS} Tenants`}
+                  {isTenantFull ? `SOLD OUT (${MAX_TENANTS}/${MAX_TENANTS})` : `${tenantCount}/${MAX_TENANTS} Tenants`}
                 </span>
                 {!isTenantFull && (
                   <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
@@ -265,7 +269,7 @@ export default function TenantPortalModal({
                     ? 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/80 dark:text-rose-400'
                     : 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/80 border-blue-200 dark:border-blue-500/30'
                 }`}>
-                  {isSubFull ? 'SOLD OUT (50/50)' : `${subscriptionCount}/${MAX_SUBSCRIPTIONS} Members`}
+                  {isSubFull ? `SOLD OUT (${MAX_SUBSCRIPTIONS}/${MAX_SUBSCRIPTIONS})` : `${subscriptionCount}/${MAX_SUBSCRIPTIONS} Members`}
                 </span>
                 {!isSubFull && (
                   <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
