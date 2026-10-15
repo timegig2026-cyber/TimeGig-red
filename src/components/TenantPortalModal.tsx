@@ -76,8 +76,8 @@ export default function TenantPortalModal({
   const isSubFull = subscriptionCount >= MAX_SUBSCRIPTIONS;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-[32px] shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-slate-800 p-6 md:p-8 space-y-6 animate-scaleUp max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 bg-transparent animate-fadeIn">
+      <div className="relative w-full h-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl shadow-2xl border-none p-6 overflow-y-auto space-y-3 animate-fadeIn">
         
         {/* Header */}
         <div className="relative z-10 flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">

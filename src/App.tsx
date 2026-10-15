@@ -502,10 +502,14 @@ export default function App() {
   const isValidCoord = (c: { lat: number; lng: number }) => !isNaN(c.lat) && !isNaN(c.lng);
   
   const flyToCoords = useCallback((coords: Coordinates, zoom = 16) => {
-    if (mapRef.current && isValidCoord(coords)) {
+    if (mapRef.current && coords && 
+        typeof coords.lat === 'number' && !isNaN(coords.lat) && isFinite(coords.lat) &&
+        typeof coords.lng === 'number' && !isNaN(coords.lng) && isFinite(coords.lng)) {
       mapRef.current.flyTo([coords.lat, coords.lng], zoom, {
         duration: 1.2,
       });
+    } else {
+      console.warn('flyToCoords: Skipping invalid coordinates:', coords);
     }
   }, []);
 
@@ -1435,7 +1439,7 @@ export default function App() {
       <div
         ref={mapElementRef}
         id="map"
-        className="w-full h-full absolute inset-0 z-0 bg-slate-900"
+        className="w-full h-full absolute inset-0 z-0 bg-slate-900 backdrop-blur-sm"
         style={{ touchAction: 'none' }}
       />
 
@@ -1788,7 +1792,7 @@ export default function App() {
 
       {/* Comprehensive Facebook-Style Profile Feature & Verification (Without back cover) */}
       {activeTab === 'profile' && (
-        <div className="absolute inset-x-4 top-10 bottom-20 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[480px] md:top-14 md:bottom-20 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-3 overflow-y-auto space-y-3 animate-fadeIn">
+        <div className="absolute inset-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl shadow-2xl border-none p-6 overflow-y-auto space-y-3 animate-fadeIn">
           
           {/* Facebook-style Top Profile Header (Centered without cover photo) */}
           <div className="flex flex-col items-center text-center pb-4 border-b border-slate-200 dark:border-slate-800 relative">
@@ -2227,7 +2231,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Docked Bottom Menu Bar */}
+      {/* Docked Bottom Menu Bar */}{!isCompletingProfileAfterRegister && isProfileLocked && activeTab !== 'profile' && activeTab !== 'tenantportal' && (
       <nav className={`fixed bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl transition-all ${
         activeTab === 'profile' ? 'py-0.5' : ''
       }`}>
@@ -2333,6 +2337,7 @@ export default function App() {
 
         </div>
       </nav>
+      )}
 
       {/* Create a GiG Modal */}
       {isCreateGigOpen && (
