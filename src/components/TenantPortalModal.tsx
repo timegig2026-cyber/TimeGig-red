@@ -11,6 +11,7 @@ interface TenantPortalModalProps {
   userEmail?: string;
   userName?: string;
   onOpenAuthModal?: () => void;
+  onSubscriptionActivated?: () => void;
 }
 
 type SubscriptionOption = 'tenant' | 'subscription' | null;
@@ -22,6 +23,7 @@ export default function TenantPortalModal({
   onClose,
   userId,
   userEmail,
+  onSubscriptionActivated,
 }: TenantPortalModalProps) {
   const [selectedOption, setSelectedOption] = useState<SubscriptionOption>(null);
   const [confirmed, setConfirmed] = useState<boolean>(false);
@@ -84,13 +86,12 @@ export default function TenantPortalModal({
     if (!selectedOption || !userId) return;
 
     try {
-      // Tenant activation does not increment the count
-      if (selectedOption === 'tenant') {
-        // No-op for counter
-      } else if (selectedOption === 'subscription' && subscriptionCount < MAX_SUBSCRIPTIONS) {
-        const next = subscriptionCount + 1;
-        setSubscriptionCount(next);
-        localStorage.setItem('timegig_sub_count', next.toString());
+      if (selectedOption === 'tenant' || selectedOption === 'subscription') {
+        if (selectedOption === 'subscription' && subscriptionCount < MAX_SUBSCRIPTIONS) {
+          const next = subscriptionCount + 1;
+          setSubscriptionCount(next);
+          localStorage.setItem('timegig_sub_count', next.toString());
+        }
         await updateDoc(doc(db, 'users', userId), {
           subscriptionActive: true,
         });
@@ -98,6 +99,9 @@ export default function TenantPortalModal({
       }
       setConfirmed(true);
       soundManager.playSuccessChime('subscription');
+      if (onSubscriptionActivated) {
+        onSubscriptionActivated();
+      }
     } catch (err) {
       console.warn('Failed to save subscription capacity', err);
       setConfirmed(true);
@@ -181,7 +185,7 @@ export default function TenantPortalModal({
           {/* Option 1: Become a Tenant (Credit Card Shaped Box - White) */}
           <button
             type="button"
-            disabled={isTenantFull}
+            disabled={isTenantFull || subscriptionActive}
             onClick={() => handleSelect('tenant')}
             className={`w-full text-left p-5 rounded-[24px] transition-all duration-300 relative group flex flex-col justify-between aspect-[1.7/1] sm:aspect-[1.9/1] transform ${
               isTenantFull

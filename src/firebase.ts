@@ -10,6 +10,8 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  setPersistence,
+  browserLocalPersistence,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -19,12 +21,16 @@ import {
   updateDoc,
   getDocFromServer,
   serverTimestamp,
+  deleteDoc,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+  console.warn('Failed to set auth persistence:', err);
+});
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
@@ -99,5 +105,6 @@ export {
   setDoc,
   updateDoc,
   serverTimestamp,
+  deleteDoc,
 };
 export type { FirebaseUser };

@@ -19,29 +19,25 @@ interface SettingsModalProps {
   userAvatar?: string;
   onLogout?: () => void;
   onOpenLogin?: () => void;
+  onResetAppAndRemoveAllAccounts?: () => Promise<void> | void;
 }
 
 export default function SettingsModal({
   isOpen,
   onClose,
+  onResetAppAndRemoveAllAccounts,
 }: SettingsModalProps) {
   if (!isOpen) return null;
 
-  const handleRestartAndRemoveAccounts = () => {
-    if (window.confirm('Are you sure you want to restart the app and remove all accounts? This will clear all local data and start fresh.')) {
-      // Clear all timegig keys from localStorage
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('timegig_')) {
-          keysToRemove.push(key);
-        }
+  const handleRestartAndRemoveAccounts = async () => {
+    if (window.confirm('Are you sure you want to restart the app and remove all accounts? This will clear all data and start fresh.')) {
+      if (onResetAppAndRemoveAllAccounts) {
+        await onResetAppAndRemoveAllAccounts();
+      } else {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.reload();
       }
-      keysToRemove.forEach((k) => localStorage.removeItem(k));
-      localStorage.clear();
-      
-      // Reload application
-      window.location.reload();
     }
   };
 

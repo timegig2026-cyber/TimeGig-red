@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   KeyRound,
   Settings,
+  RefreshCw,
 } from 'lucide-react';
 import { Coordinates, SearchResult } from './types/map';
 import {
@@ -73,6 +74,7 @@ import {
   updateDoc,
   serverTimestamp,
   getRedirectResult,
+  deleteDoc,
 } from './firebase';
 
 interface SocialLink {
@@ -175,7 +177,10 @@ export default function App() {
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
 
   // Bottom Menu Active Tab ('seekers' | 'gigs' | 'profile' | 'tenantportal' | 'settings' | null)
-  const [activeTab, setActiveTab] = useState<'seekers' | 'gigs' | 'profile' | 'tenantportal' | 'settings' | null>('seekers');
+  type TabType = 'seekers' | 'gigs' | 'profile' | 'tenantportal' | 'settings' | null;
+  const [activeTab, setActiveTab] = useState<TabType>('seekers');
+  const [isRedirectingLoading, setIsRedirectingLoading] = useState<boolean>(false);
+  const [subscriptionActive, setSubscriptionActive] = useState<boolean>(false);
 
   // Typography state (Font Style and Font Size Scaling)
   const [fontStyle, setFontStyle] = useState<FontStyleKey>(() => {
@@ -316,19 +321,18 @@ export default function App() {
     safeSaveProfile('user_posted_gigs', gigs);
   }, [gigs]);
 
-  // Profile state with quota-safe isolated storage & IndexedDB for media
-  const [profile, setProfile] = useState<ProfileState>(() => {
-    return safeLoadProfile<ProfileState>(CURRENT_USER_ID, DEFAULT_PROFILE);
-  });
+  // Profile state initialized with DEFAULT_PROFILE to prevent cross-user leakage
+  const [profile, setProfile] = useState<ProfileState>(DEFAULT_PROFILE);
 
-  const [isProfileLocked, setIsProfileLocked] = useState<boolean>(() => {
-    return safeLoadProfile<boolean>(`${CURRENT_USER_ID}_locked`, true);
-  });
+  const [isProfileLocked, setIsProfileLocked] = useState<boolean>(true);
+  const [authResolved, setAuthResolved] = useState<boolean>(false);
 
-  // Load persisted avatar from IndexedDB (device storage) on mount
+  // Load persisted avatar from IndexedDB (device storage) once auth user is known
   useEffect(() => {
+    if (!authResolved || !auth.currentUser) return;
     let isMounted = true;
-    getMediaItem(`avatar_${CURRENT_USER_ID}`).then((storedAvatar) => {
+    const uid = auth.currentUser.uid;
+    getMediaItem(`avatar_${uid}`).then((storedAvatar) => {
       if (isMounted && storedAvatar) {
         setProfile((prev) => ({
           ...prev,
@@ -339,22 +343,24 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [authResolved]);
 
-  // Save profile metadata to localStorage safely without storing large base64 strings
+  // Save profile metadata to localStorage safely once auth is resolved
   useEffect(() => {
+    if (!authResolved || !auth.currentUser) return;
     const profileToStore: ProfileState = {
       ...profile,
       avatar: profile.avatar.startsWith('data:') ? '' : profile.avatar,
     };
-    const storageKey = auth.currentUser ? `user_profile_${auth.currentUser.uid}` : CURRENT_USER_ID;
-    safeSaveProfile(storageKey, profileToStore);
-  }, [profile]);
+    const uid = auth.currentUser.uid;
+    safeSaveProfile(`user_profile_${uid}`, profileToStore);
+  }, [profile, authResolved]);
 
   useEffect(() => {
-    const storageKey = auth.currentUser ? `user_locked_${auth.currentUser.uid}` : `${CURRENT_USER_ID}_locked`;
-    safeSaveProfile(storageKey, isProfileLocked);
-  }, [isProfileLocked]);
+    if (!authResolved || !auth.currentUser) return;
+    const uid = auth.currentUser.uid;
+    safeSaveProfile(`user_locked_${uid}`, isProfileLocked);
+  }, [isProfileLocked, authResolved]);
 
   // Listen for Firebase Auth changes and sync Firestore profile
   useEffect(() => {
@@ -397,10 +403,10 @@ export default function App() {
       if (currentUser) {
         setIsLoggedIn(true);
         try {
-          const userRef = doc(db, 'users', currentUser.uid);
+          const uid = currentUser.uid;
+          const userRef = doc(db, 'users', uid);
           const docSnap = await getDoc(userRef);
           if (docSnap.exists()) {
-            // Load existing user profile without overwriting
             const data = docSnap.data();
             setProfile((prev) => ({
               ...prev,
@@ -413,25 +419,44 @@ export default function App() {
               avatar: data.avatar || currentUser.photoURL || prev.avatar,
               idDocName: data.idDocName ?? prev.idDocName,
             }));
+            const savedLocked = safeLoadProfile<boolean>(`user_locked_${uid}`, true);
+            setIsProfileLocked(savedLocked);
+            setSubscriptionActive(data.subscriptionActive || false);
+            const storedIdDoc = await getMediaItem(`iddoc_${uid}`);
+            if (storedIdDoc) {
+              setProfile((prev) => ({ ...prev, idDocName: storedIdDoc }));
+            }
             if (!data.profileCompleted) {
               setActiveTab('profile');
               setIsCompletingProfileAfterRegister(true);
             }
           } else {
-            setProfile((prev) => ({
-              ...prev,
-              email: currentUser.email || prev.email,
-              fullName: currentUser.displayName || prev.fullName,
-              avatar: currentUser.photoURL || prev.avatar,
-            }));
+            const localStored = safeLoadProfile<ProfileState>(`user_profile_${uid}`, {
+              ...DEFAULT_PROFILE,
+              email: currentUser.email || '',
+              fullName: currentUser.displayName || '',
+              avatar: currentUser.photoURL || DEFAULT_PROFILE.avatar,
+            });
+            setProfile(localStored);
+            const savedLocked = safeLoadProfile<boolean>(`user_locked_${uid}`, true);
+            setIsProfileLocked(savedLocked);
+            const storedIdDoc = await getMediaItem(`iddoc_${uid}`);
+            if (storedIdDoc) {
+              setProfile((prev) => ({ ...prev, idDocName: storedIdDoc }));
+            }
           }
         } catch (err) {
           console.warn('Could not load user profile from Firestore:', err);
+          const uid = currentUser.uid;
+          const localStored = safeLoadProfile<ProfileState>(`user_profile_${uid}`, DEFAULT_PROFILE);
+          setProfile(localStored);
         }
       } else {
         setIsLoggedIn(false);
         setProfile(DEFAULT_PROFILE);
+        setIsProfileLocked(true);
       }
+      setAuthResolved(true);
     });
 
     return () => unsubscribe();
@@ -473,27 +498,99 @@ export default function App() {
       setIsCompletingProfileAfterRegister(false);
       setProfile(DEFAULT_PROFILE);
       
-      // Clear IndexedDB
-      try {
-        const dbs = await indexedDB.databases();
-        dbs.forEach(db => {
-          if (db.name === 'timegig_storage_db') {
-            indexedDB.deleteDatabase(db.name!);
-          }
-        });
-      } catch (e) {
-        console.error('Failed to clear local storage', e);
-      }
-
-      // Reset tenant and subscription counts
-      localStorage.removeItem('timegig_tenant_count');
-      localStorage.removeItem('timegig_sub_count');
-      
-      showToast('You have been signed out and data reset.');
+      showToast('You have been signed out successfully.');
     } catch (err) {
       console.error('Sign out error:', err);
     }
   };
+
+  // Reset app and remove all accounts to start completely fresh
+  const handleResetAppAndRemoveAllAccounts = async () => {
+    try {
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        try {
+          await deleteDoc(doc(db, 'users', currentUser.uid));
+        } catch (e) {
+          console.warn('Could not delete user doc from Firestore:', e);
+        }
+        try {
+          await currentUser.delete();
+        } catch (e) {
+          console.warn('Could not delete Firebase Auth user:', e);
+        }
+      }
+
+      try {
+        await signOut(auth);
+      } catch (e) {
+        console.warn('Sign out error:', e);
+      }
+
+      // Clear all local storage and session storage
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        console.warn('Failed to clear storage:', e);
+      }
+
+      // Delete all IndexedDB databases
+      try {
+        const idb = typeof window !== 'undefined' ? window.indexedDB : null;
+        if (idb) {
+          if ('databases' in idb && typeof idb.databases === 'function') {
+            const dbs = await idb.databases();
+            for (const d of dbs) {
+              if (d.name) {
+                idb.deleteDatabase(d.name);
+              }
+            }
+          } else {
+            idb.deleteDatabase('timegig_storage_db');
+            idb.deleteDatabase('firebaseLocalStorageDb');
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to clear IndexedDB:', e);
+      }
+
+      // Reset all states
+      setIsLoggedIn(false);
+      setProfile(DEFAULT_PROFILE);
+      setIsProfileLocked(true);
+      setSubscriptionActive(false);
+      setActiveTab(null);
+      setIsCompletingProfileAfterRegister(false);
+      setActiveAssignment(null);
+      setGigs(INITIAL_GIGS);
+      setSearchResults([]);
+      setSearchQuery('');
+
+      showToast('App has been reset and all accounts removed. Starting fresh! 🔄');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      console.error('Reset error:', err);
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch {}
+      window.location.reload();
+    }
+  };
+
+  // Check if reset was requested via query parameter ?reset=1 or ?reset=true
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reset') === '1' || params.get('reset') === 'true') {
+      params.delete('reset');
+      const cleanUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+      window.history.replaceState({}, '', cleanUrl);
+      handleResetAppAndRemoveAllAccounts();
+    }
+  }, []);
 
   // Save profile & synchronize with Firestore
   const handleSaveProfile = async () => {
@@ -504,7 +601,12 @@ export default function App() {
     soundManager.playSuccessChime('profile');
     setIsProfileLocked(true);
     setIsCompletingProfileAfterRegister(false);
-    showToast('Profile saved and locked successfully!');
+    showToast('Profile saved and locked successfully! Loading Tenant Portal...');
+    setIsRedirectingLoading(true);
+    setTimeout(() => {
+      setIsRedirectingLoading(false);
+      setActiveTab('tenantportal');
+    }, 3000);
 
     if (auth.currentUser) {
       const uid = auth.currentUser.uid;
@@ -1400,8 +1502,9 @@ export default function App() {
     reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
       if (dataUrl) {
+        const uid = auth.currentUser ? auth.currentUser.uid : 'current_user';
         // Save to IndexedDB (device storage) to avoid filling localStorage quota
-        await saveMediaItem(`avatar_${CURRENT_USER_ID}`, dataUrl);
+        await saveMediaItem(`avatar_${uid}`, dataUrl);
         setProfile((prev) => ({
           ...prev,
           avatar: dataUrl,
@@ -1421,8 +1524,9 @@ export default function App() {
     reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
       if (dataUrl) {
+        const uid = auth.currentUser ? auth.currentUser.uid : 'current_user';
         // Save ID doc scan to IndexedDB
-        await saveMediaItem(`iddoc_${CURRENT_USER_ID}`, dataUrl);
+        await saveMediaItem(`iddoc_${uid}`, dataUrl);
       }
     };
     reader.readAsDataURL(file);
@@ -1473,6 +1577,13 @@ export default function App() {
       style={{ fontFamily: FONT_STYLE_OPTIONS.find((f) => f.id === fontStyle)?.fontFamily }}
       className="relative w-screen h-screen overflow-hidden m-0 p-0 font-sans bg-slate-950 text-slate-900 dark:text-slate-100"
     >
+      {isRedirectingLoading && (
+        <div className="absolute inset-0 z-50 backdrop-blur-2xl bg-slate-950/85 flex flex-col items-center justify-center space-y-4 animate-fadeIn">
+          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin shadow-[0_0_30px_rgba(16,185,129,0.5)]" />
+          <div className="text-white font-black text-sm tracking-wide animate-pulse">Loading Tenant Portal...</div>
+        </div>
+      )}
+
       {/* Full-Screen OpenStreetMap Background Wallpaper */}
       <div
         ref={mapElementRef}
@@ -1514,6 +1625,14 @@ export default function App() {
                 className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-2xl border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <Sparkles className="w-4 h-4 text-amber-400" /> Register New Account
+              </button>
+              <button
+                type="button"
+                onClick={handleResetAppAndRemoveAllAccounts}
+                className="w-full py-2.5 bg-transparent hover:bg-rose-950/30 text-rose-400 hover:text-rose-300 font-semibold text-xs rounded-xl border border-rose-900/40 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                title="Reset App & Remove All Accounts"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reset App & Start Fresh
               </button>
             </div>
           </div>
@@ -1842,6 +1961,12 @@ export default function App() {
             >
               <X className="w-5 h-5" />
             </button>
+
+            {subscriptionActive && (
+              <div className="mb-2 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500 text-white rounded-full text-xs font-black shadow-md animate-pulse">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Tenant Activated
+              </div>
+            )}
             
             <div className="relative mb-2">
               <img
@@ -2275,31 +2400,51 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'seekers' ? null : 'seekers')}
-            className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
+            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
               activeTab === 'seekers' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Users className={activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} />
-            <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Seekers</span>
+            <Users className="w-5 h-5" />
+            <span className="text-[11px]">Seekers</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab(activeTab === 'tenantportal' ? null : 'tenantportal')}
-            className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
-              activeTab === 'tenantportal' ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            onClick={() => {
+              if (subscriptionActive) {
+                showToast('Portal Subscriptions feature is locked until your subscription ends 🔒');
+                return;
+              }
+              setActiveTab(activeTab === 'tenantportal' ? null : 'tenantportal');
+            }}
+            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+              subscriptionActive
+                ? 'text-amber-600 dark:text-amber-400 opacity-90'
+                : activeTab === 'tenantportal'
+                ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
-            title="Portal"
-            aria-label="Portal"
+            title={subscriptionActive ? 'Portal (Locked)' : 'Portal'}
+            aria-label={subscriptionActive ? 'Portal (Locked)' : 'Portal'}
           >
-            <KeyRound className={activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} />
-            <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Portal</span>
+            <div className="relative">
+              <KeyRound className="w-5 h-5" />
+              {subscriptionActive && (
+                <span className="absolute -top-1 -right-1.5 bg-amber-500 text-white rounded-full p-0.5 shadow-sm border border-white dark:border-slate-900">
+                  <Lock className="w-2.5 h-2.5 stroke-[2.5]" />
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] flex items-center gap-0.5">
+              Portal
+              {subscriptionActive && <Lock className="w-2.5 h-2.5 text-amber-500" />}
+            </span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'gigs' ? null : 'gigs')}
-            className={`flex flex-col items-center ${activeTab === 'profile' ? '-mt-1' : '-mt-3'} outline-none focus:outline-none transition-all duration-200 group ${
+            className={`flex flex-col items-center -mt-3 outline-none focus:outline-none transition-all duration-200 group ${
               activeTab === 'gigs'
                 ? 'text-orange-500 dark:text-orange-400 font-bold scale-105'
                 : 'text-slate-600 dark:text-slate-400 hover:text-orange-500 dark:hover:text-orange-400'
@@ -2314,9 +2459,9 @@ export default function App() {
                   : 'group-hover:bg-orange-50 dark:group-hover:bg-slate-800'
               }`}
             >
-              <Flame className={`${activeTab === 'profile' ? 'w-6 h-6' : 'w-10 h-10'} fill-orange-500 text-orange-500 dark:fill-orange-400 dark:text-orange-400 drop-shadow-sm transition-transform group-hover:scale-110`} />
+              <Flame className="w-10 h-10 fill-orange-500 text-orange-500 dark:fill-orange-400 dark:text-orange-400 drop-shadow-sm transition-transform group-hover:scale-110" />
             </div>
-            <span className={`${activeTab === 'profile' ? 'text-[9px]' : 'text-xs'} font-bold tracking-tight -mt-0.5`}>GiGs</span>
+            <span className="text-xs font-bold tracking-tight -mt-0.5">GiGs</span>
           </button>
 
           {!isLoggedIn ? (
@@ -2326,30 +2471,28 @@ export default function App() {
                 setAuthModalInitialMode('login');
                 setIsAuthModalOpen(true);
               }}
-              className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
+              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
                 isAuthModalOpen ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Lock className={activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} />
-              <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Login</span>
+              <Lock className="w-5 h-5" />
+              <span className="text-[11px]">Login</span>
             </button>
           ) : (
             <button
               type="button"
-              onClick={() => setActiveTab(activeTab === 'profile' ? null : 'profile')}
-              className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
-                activeTab === 'profile' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
+              onClick={() => setActiveTab('profile')}
+              className="flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
             >
               <div className="relative">
                 <img
                   src={profile.avatar || DEFAULT_PROFILE.avatar}
                   alt={profile.fullName}
-                  className={`${activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} rounded-full object-cover border border-blue-500`}
+                  className="w-5 h-5 rounded-full object-cover border border-blue-500"
                 />
                 <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 border border-white dark:border-slate-900" />
               </div>
-              <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Profile</span>
+              <span className="text-[11px]">Profile</span>
             </button>
           )}
 
@@ -2357,7 +2500,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'settings' ? null : 'settings')}
-            className={`flex flex-col items-center ${activeTab === 'profile' ? 'gap-0.5' : 'gap-1'} outline-none focus:outline-none transition-colors ${
+            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
               activeTab === 'settings'
                 ? 'text-blue-600 dark:text-blue-400 font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -2365,10 +2508,10 @@ export default function App() {
             title="Settings"
             aria-label="Settings"
           >
-            <div className={`${activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} flex items-center justify-center`}>
-              <Settings className={activeTab === 'profile' ? 'w-4 h-4' : 'w-5 h-5'} />
+            <div className="w-5 h-5 flex items-center justify-center">
+              <Settings className="w-5 h-5" />
             </div>
-            <span className={activeTab === 'profile' ? 'text-[9px]' : 'text-[11px]'}>Settings</span>
+            <span className="text-[11px]">Settings</span>
           </button>
 
         </div>
@@ -2677,6 +2820,15 @@ export default function App() {
           setAuthModalInitialMode('login');
           setIsAuthModalOpen(true);
         }}
+        onSubscriptionActivated={() => {
+          setSubscriptionActive(true);
+          showToast('Subscription activated successfully! Loading GiGs...');
+          setIsRedirectingLoading(true);
+          setTimeout(() => {
+            setIsRedirectingLoading(false);
+            setActiveTab('gigs');
+          }, 3000);
+        }}
       />
 
       {/* Settings Modal: Font Style, Font Size Scaling & Account Logout */}
@@ -2705,6 +2857,7 @@ export default function App() {
           setAuthModalInitialMode('login');
           setIsAuthModalOpen(true);
         }}
+        onResetAppAndRemoveAllAccounts={handleResetAppAndRemoveAllAccounts}
       />
 
       {/* Toast Notification */}
