@@ -28,6 +28,7 @@ import {
   RefreshCw,
   LayoutDashboard,
   Zap,
+  HelpCircle,
 } from 'lucide-react';
 import { Coordinates, SearchResult } from './types/map';
 import {
@@ -64,7 +65,7 @@ import { GigCancelledAlertModal } from './components/GigCancelledAlertModal';
 import AuthModal from './components/AuthModal';
 import ActivationModal from './components/ActivationModal';
 import PortalDashboard from './components/PortalDashboard';
-
+import AppHelpModal from './components/AppHelpModal';
 import SettingsModal from './components/SettingsModal';
 import {
   auth,
@@ -190,6 +191,7 @@ export default function App() {
   const [isRedirectingLoading, setIsRedirectingLoading] = useState<boolean>(false);
   const [isActivationModalOpen, setIsActivationModalOpen] = useState<boolean>(false);
   const [isPortalDashboardOpen, setIsPortalDashboardOpen] = useState<boolean>(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
 
   // Typography state (Font Style and Font Size Scaling)
   const [fontStyle, setFontStyle] = useState<FontStyleKey>(() => {
@@ -1755,6 +1757,16 @@ export default function App() {
                 <span className="hidden sm:inline">Log In</span>
               </button>
             )}
+
+            {/* Global Help Button */}
+            <button
+              type="button"
+              onClick={() => setIsHelpModalOpen(true)}
+              title="Help & App Guide"
+              className="shrink-0 flex items-center justify-center w-11 h-11 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-2xl hover:scale-105 active:scale-95 transition-all cursor-pointer text-slate-700 dark:text-slate-200"
+            >
+              <HelpCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </button>
           </div>
 
           {/* Autocomplete Results Dropdown (Only for worldwide search outside Seekers tab) */}
@@ -2400,12 +2412,20 @@ export default function App() {
         </div>
       )}
 
-      {/* Docked Bottom Menu Bar */}{isLoggedIn && !isCompletingProfileAfterRegister && activeTab !== 'profile' && (
+      {/* Docked Bottom Menu Bar */}{isLoggedIn && activeTab !== 'profile' && (
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl transition-all">
         <div className="max-w-md mx-auto flex items-center justify-around px-6 py-3.5">
           <button
             type="button"
-            onClick={() => setActiveTab(activeTab === 'seekers' ? null : 'seekers')}
+            onClick={() => {
+              if (!profile.fullName || !profile.avatar || isCompletingProfileAfterRegister) {
+                showToast('Please complete your profile information first to unlock features.');
+                setActiveTab('profile');
+                setIsCompletingProfileAfterRegister(true);
+                return;
+              }
+              setActiveTab(activeTab === 'seekers' ? null : 'seekers');
+            }}
             className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
               activeTab === 'seekers' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
@@ -2417,6 +2437,12 @@ export default function App() {
           <button
             type="button"
             onClick={() => {
+              if (!profile.fullName || !profile.avatar || isCompletingProfileAfterRegister) {
+                showToast('Please complete your profile information first to unlock features.');
+                setActiveTab('profile');
+                setIsCompletingProfileAfterRegister(true);
+                return;
+              }
               if (profile.activationOption === 'tenant') {
                 setIsPortalDashboardOpen(true);
               } else if (profile.activationOption === 'subscription') {
@@ -2442,7 +2468,15 @@ export default function App() {
 
           <button
             type="button"
-            onClick={() => setActiveTab(activeTab === 'gigs' ? null : 'gigs')}
+            onClick={() => {
+              if (!profile.fullName || !profile.avatar || isCompletingProfileAfterRegister) {
+                showToast('Please complete your profile information first to unlock features.');
+                setActiveTab('profile');
+                setIsCompletingProfileAfterRegister(true);
+                return;
+              }
+              setActiveTab(activeTab === 'gigs' ? null : 'gigs');
+            }}
             className={`flex flex-col items-center -mt-3 outline-none focus:outline-none transition-all duration-200 group ${
               activeTab === 'gigs'
                 ? 'text-orange-500 dark:text-orange-400 font-bold scale-105'
@@ -2823,6 +2857,12 @@ export default function App() {
       {isPortalDashboardOpen && (
         <PortalDashboard onClose={() => setIsPortalDashboardOpen(false)} userEmail={profile.email} />
       )}
+
+      {/* App Help Modal */}
+      <AppHelpModal
+        isOpen={isHelpModalOpen}
+        onClose={() => setIsHelpModalOpen(false)}
+      />
 
 
       {/* Settings Modal: Font Style, Font Size Scaling & Account Logout */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle2, DollarSign, UserCheck, Shield, Zap } from 'lucide-react';
+import { X, CheckCircle2, DollarSign, UserCheck, Shield, Zap, Info } from 'lucide-react';
 import { db, doc, updateDoc } from '../firebase';
 import { getMediaItem } from '../utils/storage';
 
@@ -93,6 +93,13 @@ export default function ActivationModal({ isOpen, onClose, profile, userId, onAc
                   activeIdDoc || 'No ID Document'
                 )}
               </div>
+            </div>
+          </div>
+          <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-blue-900 dark:text-blue-200 space-y-1">
+              <p className="font-bold">Help Information</p>
+              <p>Your selfie and ID document will be securely attached to verify your account. Once submitted, your subscription/tenant tier activates immediately for 30 days.</p>
             </div>
           </div>
           <label className="flex items-center gap-3 cursor-pointer">
