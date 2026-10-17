@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, DollarSign, UserCheck, Shield, Zap, Info } from 'lucide-react';
-import { db, doc, updateDoc } from '../firebase';
+import { db, doc, setDoc, auth } from '../firebase';
 import { getMediaItem } from '../utils/storage';
 
 interface ActivationModalProps {
@@ -8,7 +8,7 @@ interface ActivationModalProps {
   onClose: () => void;
   profile: any;
   userId: string;
-  onActivate: () => void;
+  onActivate: (option: 'tenant' | 'subscription', date: number) => void;
 }
 
 export default function ActivationModal({ isOpen, onClose, profile, userId, onActivate }: ActivationModalProps) {
@@ -33,22 +33,30 @@ export default function ActivationModal({ isOpen, onClose, profile, userId, onAc
   const hasDocuments = profile && profile.avatar && activeIdDoc;
 
   const handleActivate = async () => {
-    if (!selectedOption || !userId) return;
+    if (!selectedOption) return;
     setStatus('activating');
+    const now = Date.now();
     try {
-      await updateDoc(doc(db, 'users', userId), {
-        activationOption: selectedOption,
-        activationDate: Date.now(),
-      });
+      const targetUserId = userId || (auth.currentUser ? auth.currentUser.uid : 'current_user');
+      if (targetUserId) {
+        try {
+          await setDoc(doc(db, 'users', targetUserId), {
+            activationOption: selectedOption,
+            activationDate: now,
+          }, { merge: true });
+        } catch (dbErr) {
+          console.warn('Firestore activation update warning:', dbErr);
+        }
+      }
       setStatus('success');
       setTimeout(() => {
-        onActivate();
+        onActivate(selectedOption, now);
         onClose();
         setStatus('idle');
         setSelectedOption(null);
         setShowSubmission(false);
         setAcceptedTerms(false);
-      }, 2500);
+      }, 1500);
     } catch (error) {
       console.error('Error activating:', error);
       setStatus('idle');

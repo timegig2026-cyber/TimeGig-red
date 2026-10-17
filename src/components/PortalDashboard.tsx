@@ -6,9 +6,11 @@ import { soundManager } from '../utils/sound';
 interface PortalDashboardProps {
   onClose: () => void;
   userEmail: string;
+  activationOption?: 'tenant' | 'subscription' | null;
+  activationDate?: number;
 }
 
-export default function PortalDashboard({ onClose, userEmail }: PortalDashboardProps) {
+export default function PortalDashboard({ onClose, userEmail, activationOption, activationDate }: PortalDashboardProps) {
   const [dashboardTab, setDashboardTab] = useState<'overview' | 'verification' | 'tenant_pop' | 'user_pop'>('overview');
   const [referredUsers, setReferredUsers] = useState<any[]>([]);
   const [toastFeedback, setToastFeedback] = useState<string | null>(null);
@@ -25,8 +27,15 @@ export default function PortalDashboard({ onClose, userEmail }: PortalDashboardP
         collection(db, 'users'),
         where('referredBy', '==', userEmail)
       );
+      let isFirstSnapshot = true;
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const users: any[] = [];
+        snapshot.docChanges().forEach((change) => {
+          if (!isFirstSnapshot && change.type === 'added') {
+            soundManager.playSuccessChime('signup');
+          }
+        });
+        isFirstSnapshot = false;
         snapshot.forEach((docSnap) => {
           users.push({ id: docSnap.id, ...docSnap.data() });
         });
@@ -38,6 +47,9 @@ export default function PortalDashboard({ onClose, userEmail }: PortalDashboardP
 
   const tenantCount = referredUsers.filter(u => u.activationOption === 'tenant').length;
   const subscriptionCount = referredUsers.filter(u => u.activationOption === 'subscription').length;
+  const daysRemaining = activationDate && activationDate > 0
+    ? Math.max(0, 30 - Math.floor((Date.now() - activationDate) / (24 * 60 * 60 * 1000)))
+    : 30;
 
   return (
     <div className="fixed inset-0 z-50 bg-white dark:bg-slate-900 flex flex-col animate-fadeIn">
@@ -67,6 +79,18 @@ export default function PortalDashboard({ onClose, userEmail }: PortalDashboardP
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {dashboardTab === 'overview' && (
           <div className="space-y-6 animate-fadeIn max-w-2xl mx-auto w-full">
+            {activationOption === 'subscription' && (
+              <div className="p-5 rounded-3xl bg-blue-600 text-white shadow-lg flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase font-bold text-blue-200">User Subscription Status</p>
+                  <p className="text-2xl font-black mt-1">{daysRemaining} Days Remaining</p>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center font-bold text-xl">
+                  {daysRemaining}d
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="p-5 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/50">
                 <p className="text-xs uppercase font-bold text-emerald-600 dark:text-emerald-400">Active Tenants</p>
@@ -222,42 +246,42 @@ export default function PortalDashboard({ onClose, userEmail }: PortalDashboardP
       </div>
 
       {/* Bottom Menu Bar */}
-      <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="grid grid-cols-4 gap-2 max-w-md mx-auto">
+      <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="grid grid-cols-4 gap-1.5 max-w-sm mx-auto">
           <button 
             type="button" 
             onClick={() => setDashboardTab('overview')} 
-            className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${dashboardTab === 'overview' ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+            className={`flex flex-col items-center gap-0.5 p-1.5 rounded-xl transition-all ${dashboardTab === 'overview' ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
           >
-            <LayoutDashboard className="w-5 h-5" />
-            <span className="text-[10px]">Overview</span>
+            <LayoutDashboard className="w-4 h-4" />
+            <span className="text-[9.5px]">Overview</span>
           </button>
 
           <button 
             type="button" 
             onClick={() => setDashboardTab('verification')} 
-            className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${dashboardTab === 'verification' ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+            className={`flex flex-col items-center gap-0.5 p-1.5 rounded-xl transition-all ${dashboardTab === 'verification' ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
           >
-            <ShieldCheck className="w-5 h-5" />
-            <span className="text-[10px]">Verification</span>
+            <ShieldCheck className="w-4 h-4" />
+            <span className="text-[9.5px]">Verification</span>
           </button>
 
           <button 
             type="button" 
             onClick={() => setDashboardTab('tenant_pop')} 
-            className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${dashboardTab === 'tenant_pop' ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+            className={`flex flex-col items-center gap-0.5 p-1.5 rounded-xl transition-all ${dashboardTab === 'tenant_pop' ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
           >
-            <Building2 className="w-5 h-5" />
-            <span className="text-[10px]">Tenant PoP</span>
+            <Building2 className="w-4 h-4" />
+            <span className="text-[9.5px]">Tenant PoP</span>
           </button>
 
           <button 
             type="button" 
             onClick={() => setDashboardTab('user_pop')} 
-            className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all ${dashboardTab === 'user_pop' ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+            className={`flex flex-col items-center gap-0.5 p-1.5 rounded-xl transition-all ${dashboardTab === 'user_pop' ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
           >
-            <FileCheck className="w-5 h-5" />
-            <span className="text-[10px]">User PoP</span>
+            <FileCheck className="w-4 h-4" />
+            <span className="text-[9.5px]">User PoP</span>
           </button>
         </div>
       </div>

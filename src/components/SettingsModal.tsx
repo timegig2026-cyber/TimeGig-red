@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Settings, RefreshCw, Trash2, ShieldAlert } from 'lucide-react';
+import { X, Settings } from 'lucide-react';
 import {
   FontStyleKey,
   FontSizeKey,
@@ -19,27 +19,17 @@ interface SettingsModalProps {
   userAvatar?: string;
   onLogout?: () => void;
   onOpenLogin?: () => void;
-  onResetAppAndRemoveAllAccounts?: () => Promise<void> | void;
 }
 
 export default function SettingsModal({
   isOpen,
   onClose,
-  onResetAppAndRemoveAllAccounts,
+  isLoggedIn,
+  userEmail,
+  userName,
+  onLogout,
 }: SettingsModalProps) {
   if (!isOpen) return null;
-
-  const handleRestartAndRemoveAccounts = async () => {
-    if (window.confirm('Are you sure you want to restart the app and remove all accounts? This will clear all data and start fresh.')) {
-      if (onResetAppAndRemoveAllAccounts) {
-        await onResetAppAndRemoveAllAccounts();
-      } else {
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.reload();
-      }
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fadeIn">
@@ -64,27 +54,31 @@ export default function SettingsModal({
           </button>
         </div>
 
-        {/* Empty Content Area & Restart / Fresh Start Action */}
+        {/* Content Area */}
         <div className="flex flex-col items-center justify-center py-6 text-center space-y-4">
           <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-1">
             <Settings className="w-7 h-7" />
           </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500">Settings is empty</p>
-
-          <div className="w-full pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-            <div className="text-left">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-1">Account & App Reset</span>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">Restart the app, remove all accounts, and start completely fresh.</p>
+          {isLoggedIn ? (
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{userName || 'Active User'}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{userEmail}</p>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onLogout();
+                    onClose();
+                  }}
+                  className="mt-3 px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Log Out
+                </button>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={handleRestartAndRemoveAccounts}
-              className="w-full py-3 px-4 rounded-2xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/70 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
-            >
-              <RefreshCw className="w-4 h-4 animate-spin-slow" />
-              <span>Restart App & Remove All Accounts</span>
-            </button>
-          </div>
+          ) : (
+            <p className="text-xs text-slate-400 dark:text-slate-500">Settings configured and active</p>
+          )}
         </div>
 
         {/* Footer */}

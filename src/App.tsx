@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import L from 'leaflet';
 import {
   Navigation,
@@ -29,6 +29,8 @@ import {
   LayoutDashboard,
   Zap,
   HelpCircle,
+  AlertCircle,
+  Timer,
 } from 'lucide-react';
 import { Coordinates, SearchResult } from './types/map';
 import {
@@ -98,6 +100,7 @@ interface ProfileState {
   email: string;
   socials: SocialLink[];
   lastAvatarUpdate: number;
+  avatarUpdateCount?: number;
   activationOption?: 'tenant' | 'subscription' | null;
   activationDate?: number;
 }
@@ -115,6 +118,7 @@ const DEFAULT_PROFILE: ProfileState = {
   email: '',
   socials: [],
   lastAvatarUpdate: 0,
+  avatarUpdateCount: 0,
   activationOption: null,
   activationDate: 0,
 };
@@ -337,6 +341,39 @@ export default function App() {
 
   const [isProfileLocked, setIsProfileLocked] = useState<boolean>(true);
   const [authResolved, setAuthResolved] = useState<boolean>(false);
+
+  // Compute missing profile requirements dynamically
+  const profileMissingItems = useMemo(() => {
+    const missing: { key: string; label: string; step: number }[] = [];
+    if (!profile.avatar || profile.avatar === DEFAULT_PROFILE.avatar) {
+      missing.push({ key: 'avatar', label: 'Face Selfie / Profile Picture', step: 1 });
+    }
+    if (!profile.idDocName) {
+      missing.push({ key: 'idDoc', label: 'Government ID Document Scan', step: 1 });
+    }
+    if (!profile.fullName || !profile.fullName.trim()) {
+      missing.push({ key: 'fullName', label: 'Full Name', step: 2 });
+    }
+    if (!profile.location || !profile.location.trim()) {
+      missing.push({ key: 'location', label: 'City / Location', step: 3 });
+    }
+    if (!profile.province || !profile.province.trim()) {
+      missing.push({ key: 'province', label: 'Province / State', step: 3 });
+    }
+    if (!profile.contact || !profile.contact.trim()) {
+      missing.push({ key: 'contact', label: 'Contact Phone Number', step: 4 });
+    }
+    return missing;
+  }, [profile.avatar, profile.idDocName, profile.fullName, profile.location, profile.province, profile.contact]);
+
+  const isProfileComplete = profileMissingItems.length === 0;
+
+  // Compute remaining days for active User Subscription
+  const subscriptionDaysRemaining = useMemo(() => {
+    if (!profile.activationDate || profile.activationDate === 0) return 30;
+    const elapsedDays = Math.floor((Date.now() - profile.activationDate) / (24 * 60 * 60 * 1000));
+    return Math.max(0, 30 - elapsedDays);
+  }, [profile.activationDate]);
 
   // Load persisted avatar from IndexedDB (device storage) once auth user is known
   useEffect(() => {
@@ -572,7 +609,6 @@ export default function App() {
       setIsLoggedIn(false);
       setProfile(DEFAULT_PROFILE);
       setIsProfileLocked(true);
-      setSubscriptionActive(false);
       setActiveTab(null);
       setIsCompletingProfileAfterRegister(false);
       setActiveAssignment(null);
@@ -607,23 +643,26 @@ export default function App() {
 
   // Save profile & synchronize with Firestore
   const handleSaveProfile = async () => {
-    if (!profile.avatar || !profile.idDocName) {
-      showToast('Please upload a profile picture and ID document to complete your profile.');
+    if (profileMissingItems.length > 0) {
+      const missingList = profileMissingItems.map((m) => m.label).join(', ');
+      showToast(`Missing required profile items: ${missingList}`);
+      setProfileStep(profileMissingItems[0].step);
       return;
     }
+
     soundManager.playSuccessChime('profile');
     setIsProfileLocked(true);
     setIsCompletingProfileAfterRegister(false);
-    showToast('Profile saved and locked successfully! Loading Tenant Portal...');
-    setIsRedirectingLoading(true);
-    setTimeout(() => {
-      setIsRedirectingLoading(false);
-      setActiveTab(null);
-    }, 3000);
+    showToast('Profile completed and saved! Profile icon locked at bottom bar.');
 
     if (auth.currentUser) {
       const uid = auth.currentUser.uid;
-      safeSaveProfile(`user_profile_${uid}`, profile);
+      const updatedProfile = {
+        ...profile,
+        avatarUpdateCount: profile.avatarUpdateCount || 1,
+      };
+      setProfile(updatedProfile);
+      safeSaveProfile(`user_profile_${uid}`, updatedProfile);
       safeSaveProfile(`user_locked_${uid}`, true);
       try {
         const userRef = doc(db, 'users', uid);
@@ -638,6 +677,7 @@ export default function App() {
           email: profile.email || auth.currentUser.email || '',
           avatar: profile.avatar || '',
           idDocName: profile.idDocName || '',
+          avatarUpdateCount: profile.avatarUpdateCount || 1,
           profileCompleted: true,
           updatedAt: serverTimestamp(),
         }, { merge: true });
@@ -1282,6 +1322,7 @@ export default function App() {
       postedBy: 'me',
     };
 
+    soundManager.playSuccessChime('success');
     setGigs((prev) => [newGig, ...prev]);
     setIsCreateGigOpen(false);
     setGigTitle('');
@@ -1498,16 +1539,13 @@ export default function App() {
     return loc.includes(q) || prov.includes(q);
   });
 
-  // Profile handlers enforcing 1-month picture update restriction & auto-location with IndexedDB storage
+  // Profile handlers enforcing single-time profile picture update restriction & auto-location with IndexedDB storage
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-    const now = Date.now();
-    if (profile.lastAvatarUpdate && now - profile.lastAvatarUpdate < ONE_MONTH_MS) {
-      const daysLeft = Math.ceil((ONE_MONTH_MS - (now - profile.lastAvatarUpdate)) / (24 * 60 * 60 * 1000));
-      showToast(`Profile picture can only be updated once a month. Approx ${daysLeft} days remaining.`);
+    if (profile.avatarUpdateCount && profile.avatarUpdateCount >= 1) {
+      showToast('Profile picture can only be updated once for security and verification.');
       return;
     }
 
@@ -1516,14 +1554,16 @@ export default function App() {
       const dataUrl = ev.target?.result as string;
       if (dataUrl) {
         const uid = auth.currentUser ? auth.currentUser.uid : 'current_user';
+        const now = Date.now();
         // Save to IndexedDB (device storage) to avoid filling localStorage quota
         await saveMediaItem(`avatar_${uid}`, dataUrl);
         setProfile((prev) => ({
           ...prev,
           avatar: dataUrl,
           lastAvatarUpdate: now,
+          avatarUpdateCount: 1,
         }));
-        showToast('Face selfie / profile picture updated successfully!');
+        showToast('Profile picture uploaded and permanently locked (one-time update)!');
       }
     };
     reader.readAsDataURL(file);
@@ -1638,14 +1678,6 @@ export default function App() {
                 className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-2xl border border-slate-700 transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <Sparkles className="w-4 h-4 text-amber-400" /> Register New Account
-              </button>
-              <button
-                type="button"
-                onClick={handleResetAppAndRemoveAllAccounts}
-                className="w-full py-2.5 bg-transparent hover:bg-rose-950/30 text-rose-400 hover:text-rose-300 font-semibold text-xs rounded-xl border border-rose-900/40 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                title="Reset App & Remove All Accounts"
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> Reset App & Start Fresh
               </button>
             </div>
           </div>
@@ -2008,7 +2040,7 @@ export default function App() {
                   onClick={() => setIsProfileLocked(false)}
                   className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
                 >
-                  <Unlock className="w-3.5 h-3.5" /> Edit Profile
+                  <Unlock className="w-3.5 h-3.5" /> Edit Profile Anytime
                 </button>
               ) : (
                 <button
@@ -2016,7 +2048,7 @@ export default function App() {
                   onClick={handleSaveProfile}
                   className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
                 >
-                  <Lock className="w-3.5 h-3.5" /> Save Profile
+                  <Lock className="w-3.5 h-3.5" /> Save & Lock Profile
                 </button>
               )}
 
@@ -2043,6 +2075,68 @@ export default function App() {
               )}
             </div>
           </div>
+
+          {/* Profile Completion Checklist & Missing Requirements Card */}
+          {!isProfileComplete ? (
+            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 mb-3 space-y-2.5 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    Profile Incomplete ({6 - profileMissingItems.length}/6 Completed)
+                  </span>
+                </div>
+                <span className="text-xs font-extrabold text-amber-700 dark:text-amber-300">
+                  {Math.round(((6 - profileMissingItems.length) / 6) * 100)}%
+                </span>
+              </div>
+              
+              {/* Progress Bar */}
+              <div className="w-full h-2 rounded-full bg-amber-200/60 dark:bg-amber-900/40 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 rounded-full transition-all duration-300" 
+                  style={{ width: `${Math.round(((6 - profileMissingItems.length) / 6) * 100)}%` }} 
+                />
+              </div>
+
+              {/* Missing Items List with direct jump button */}
+              <div className="pt-1">
+                <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 mb-1.5">
+                  Missing information to complete:
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {profileMissingItems.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        setProfileStep(item.step);
+                        setIsProfileLocked(false);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/50 dark:hover:bg-amber-900/70 text-amber-900 dark:text-amber-200 text-[10px] font-bold transition-all cursor-pointer shadow-xs"
+                      title={`Click to fill in ${item.label}`}
+                    >
+                      <span className="text-amber-600 dark:text-amber-400 font-extrabold">•</span>
+                      <span>{item.label}</span>
+                      <span className="text-[9px] opacity-70 underline ml-0.5">Step {item.step}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 mb-3 flex items-center justify-between animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                  Profile 100% Completed & Verified!
+                </span>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-200/80 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300">
+                All Features Unlocked
+              </span>
+            </div>
+          )}
 
           {/* Multi-step Navigation Tabs */}
           <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl mb-2">
@@ -2072,9 +2166,16 @@ export default function App() {
             <div className="space-y-4 animate-fadeIn">
               {/* Section 1: Face Selfie / Profile Picture */}
               <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  1. Face Selfie / Profile Picture (Update once a month)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    1. Face Selfie / Profile Picture
+                  </label>
+                  {(profile.avatarUpdateCount && profile.avatarUpdateCount >= 1) && (
+                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                      <Lock className="w-2.5 h-2.5" /> Locked (Updated once)
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
                   <img
                     src={profile.avatar}
@@ -2084,11 +2185,13 @@ export default function App() {
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold text-slate-900 dark:text-white">Active Face Verification Photo</div>
                     <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      Restrictions apply: You can only update your profile picture once every 30 days.
+                      {(profile.avatarUpdateCount && profile.avatarUpdateCount >= 1)
+                        ? 'Profile picture has been updated and is permanently locked for security.'
+                        : 'Notice: You can only update your profile picture once.'}
                     </div>
-                    {!isProfileLocked && (
+                    {!isProfileLocked && (!profile.avatarUpdateCount || profile.avatarUpdateCount < 1) ? (
                       <label className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl cursor-pointer shadow-sm transition-all">
-                        <Camera className="w-3.5 h-3.5" /> Upload / Capture Selfie
+                        <Camera className="w-3.5 h-3.5" /> Upload Selfie (Once only)
                         <input
                           type="file"
                           accept="image/*"
@@ -2097,6 +2200,10 @@ export default function App() {
                           className="hidden"
                         />
                       </label>
+                    ) : !isProfileLocked && (
+                      <div className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs font-semibold rounded-xl cursor-not-allowed">
+                        <Lock className="w-3.5 h-3.5 text-amber-500" /> Picture Locked (Updated Once)
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2413,71 +2520,86 @@ export default function App() {
       )}
 
       {/* Docked Bottom Menu Bar */}{isLoggedIn && activeTab !== 'profile' && (
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl transition-all">
-        <div className="max-w-md mx-auto flex items-center justify-around px-6 py-3.5">
+      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-2xl transition-all">
+        <div className="max-w-sm mx-auto flex items-center justify-around px-3 py-1.5">
           <button
             type="button"
             onClick={() => {
-              if (!profile.fullName || !profile.avatar || isCompletingProfileAfterRegister) {
-                showToast('Please complete your profile information first to unlock features.');
+              if (!isProfileComplete) {
+                showToast(`Please complete missing profile items: ${profileMissingItems.map(m => m.label).join(', ')}`);
                 setActiveTab('profile');
-                setIsCompletingProfileAfterRegister(true);
                 return;
               }
               setActiveTab(activeTab === 'seekers' ? null : 'seekers');
             }}
-            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+            className={`flex flex-col items-center gap-0.5 outline-none focus:outline-none transition-colors ${
               activeTab === 'seekers' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Users className="w-5 h-5" />
-            <span className="text-[11px]">Seekers</span>
+            <Users className="w-4 h-4" />
+            <span className="text-[10px] leading-tight">Seekers</span>
           </button>
 
           <button
             type="button"
             onClick={() => {
-              if (!profile.fullName || !profile.avatar || isCompletingProfileAfterRegister) {
-                showToast('Please complete your profile information first to unlock features.');
+              if (!isProfileComplete) {
+                showToast(`Please complete missing profile items: ${profileMissingItems.map(m => m.label).join(', ')}`);
                 setActiveTab('profile');
-                setIsCompletingProfileAfterRegister(true);
                 return;
               }
-              if (profile.activationOption === 'tenant') {
+              if (profile.activationOption === 'tenant' || profile.activationOption === 'subscription') {
                 setIsPortalDashboardOpen(true);
-              } else if (profile.activationOption === 'subscription') {
-                showToast(`Subscription active! ${30 - Math.floor((Date.now() - profile.activationDate) / (24 * 60 * 60 * 1000))} days remaining.`);
               } else {
                 setIsActivationModalOpen(true);
               }
             }}
-            className="flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
+            className={`flex flex-col items-center gap-0.5 outline-none focus:outline-none transition-colors ${
+              profile.activationOption === 'subscription'
+                ? 'text-blue-600 dark:text-blue-400'
+                : 'text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
+            }`}
+            title={
+              profile.activationOption === 'subscription'
+                ? `User Subscription: ${subscriptionDaysRemaining} days remaining`
+                : profile.activationOption === 'tenant'
+                ? 'Tenant Portal Dashboard'
+                : 'Activate Membership'
+            }
           >
             {profile.activationOption === 'tenant' ? (
-              <LayoutDashboard className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              <LayoutDashboard className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             ) : profile.activationOption === 'subscription' ? (
-              <div className="w-5 h-5 flex items-center justify-center font-bold text-xs text-blue-600 dark:text-blue-400">
-                {Math.max(0, 30 - Math.floor((Date.now() - (profile.activationDate || Date.now())) / (24 * 60 * 60 * 1000)))}
+              <div className="relative flex items-center justify-center">
+                <Timer className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-pulse" />
+                <span className="absolute -top-1.5 -right-2.5 px-1 py-0.2 rounded-full bg-blue-600 text-white font-extrabold text-[8px] leading-tight shadow-xs">
+                  {subscriptionDaysRemaining}d
+                </span>
               </div>
             ) : (
-              <Zap className="w-5 h-5" />
+              <Zap className="w-4 h-4" />
             )}
-            <span className="text-[11px]">{profile.activationOption ? 'Status' : 'Activate'}</span>
+            <span className={`text-[10px] leading-tight ${profile.activationOption === 'subscription' ? 'font-bold text-blue-600 dark:text-blue-400' : ''}`}>
+              {profile.activationOption === 'subscription'
+                ? `${subscriptionDaysRemaining}d Timer`
+                : profile.activationOption === 'tenant'
+                ? 'Status'
+                : 'Activate'}
+            </span>
           </button>
 
 
           <button
             type="button"
             onClick={() => {
-              if (!profile.fullName || !profile.avatar || isCompletingProfileAfterRegister) {
-                showToast('Please complete your profile information first to unlock features.');
+              if (!isProfileComplete) {
+                showToast(`Please complete missing profile items: ${profileMissingItems.map(m => m.label).join(', ')}`);
                 setActiveTab('profile');
-                setIsCompletingProfileAfterRegister(true);
                 return;
               }
               setActiveTab(activeTab === 'gigs' ? null : 'gigs');
             }}
-            className={`flex flex-col items-center -mt-3 outline-none focus:outline-none transition-all duration-200 group ${
+            className={`flex flex-col items-center -mt-3.5 outline-none focus:outline-none transition-all duration-200 group ${
               activeTab === 'gigs'
                 ? 'text-orange-500 dark:text-orange-400 font-bold scale-105'
                 : 'text-slate-600 dark:text-slate-400 hover:text-orange-500 dark:hover:text-orange-400'
@@ -2486,15 +2608,15 @@ export default function App() {
             aria-label="GiGs"
           >
             <div
-              className={`p-1.5 rounded-xl flex items-center justify-center transition-all duration-200 ${
+              className={`p-1.5 rounded-2xl flex items-center justify-center transition-all duration-200 ${
                 activeTab === 'gigs'
                   ? 'bg-orange-500/15 dark:bg-orange-500/25 ring-2 ring-orange-500/50 shadow-lg shadow-orange-500/25'
                   : 'group-hover:bg-orange-50 dark:group-hover:bg-slate-800'
               }`}
             >
-              <Flame className="w-10 h-10 fill-orange-500 text-orange-500 dark:fill-orange-400 dark:text-orange-400 drop-shadow-sm transition-transform group-hover:scale-110" />
+              <Flame className="w-10 h-10 fill-orange-500 text-orange-500 dark:fill-orange-400 dark:text-orange-400 drop-shadow-md transition-transform group-hover:scale-110" />
             </div>
-            <span className="text-xs font-bold tracking-tight -mt-0.5">GiGs</span>
+            <span className="text-[10px] font-bold tracking-tight">GiGs</span>
           </button>
 
           {!isLoggedIn ? (
@@ -2504,28 +2626,40 @@ export default function App() {
                 setAuthModalInitialMode('login');
                 setIsAuthModalOpen(true);
               }}
-              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+              className={`flex flex-col items-center gap-0.5 outline-none focus:outline-none transition-colors ${
                 isAuthModalOpen ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Lock className="w-5 h-5" />
-              <span className="text-[11px]">Login</span>
+              <Lock className="w-4 h-4" />
+              <span className="text-[10px] leading-tight">Login</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={() => setActiveTab('profile')}
-              className="flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              className="flex flex-col items-center gap-0.5 outline-none focus:outline-none transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              title="Click to view or edit profile anytime"
             >
               <div className="relative">
                 <img
                   src={profile.avatar || DEFAULT_PROFILE.avatar}
                   alt={profile.fullName}
-                  className="w-5 h-5 rounded-full object-cover border border-blue-500"
+                  className="w-4 h-4 rounded-full object-cover border border-blue-500"
                 />
-                <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 border border-white dark:border-slate-900" />
+                {isProfileLocked && isProfileComplete ? (
+                  <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-600 border border-white dark:border-slate-900 flex items-center justify-center text-white" title="Profile Saved & Locked">
+                    <Lock className="w-1.5 h-1.5" />
+                  </span>
+                ) : (
+                  <span className={`absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full border border-white dark:border-slate-900 ${isProfileComplete ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                )}
               </div>
-              <span className="text-[11px]">Profile</span>
+              <span className="text-[10px] leading-tight flex items-center gap-0.5">
+                Profile
+                {isProfileLocked && isProfileComplete && (
+                  <Lock className="w-2 h-2 text-emerald-600 dark:text-emerald-400" />
+                )}
+              </span>
             </button>
           )}
 
@@ -2533,7 +2667,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setActiveTab(activeTab === 'settings' ? null : 'settings')}
-            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+            className={`flex flex-col items-center gap-0.5 outline-none focus:outline-none transition-colors ${
               activeTab === 'settings'
                 ? 'text-blue-600 dark:text-blue-400 font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -2541,10 +2675,10 @@ export default function App() {
             title="Settings"
             aria-label="Settings"
           >
-            <div className="w-5 h-5 flex items-center justify-center">
-              <Settings className="w-5 h-5" />
+            <div className="w-4 h-4 flex items-center justify-center">
+              <Settings className="w-4 h-4" />
             </div>
-            <span className="text-[11px]">Settings</span>
+            <span className="text-[10px] leading-tight">Settings</span>
           </button>
 
         </div>
@@ -2847,15 +2981,34 @@ export default function App() {
         onClose={() => setIsActivationModalOpen(false)}
         profile={profile}
         userId={auth.currentUser?.uid || ''}
-        onActivate={() => {
+        onActivate={(option, date) => {
+          setProfile((prev) => {
+            const updated = {
+              ...prev,
+              activationOption: option,
+              activationDate: date,
+            };
+            const uid = auth.currentUser ? auth.currentUser.uid : 'current_user';
+            safeSaveProfile(`user_profile_${uid}`, updated);
+            return updated;
+          });
           setIsActivationModalOpen(false);
-          showToast(`Successfully submitted documents for activation!`);
+          if (option === 'subscription') {
+            showToast('User Subscription activated! 30-day countdown timer is now active on the bottom menu.');
+          } else {
+            showToast('Tenant membership activated! Tenant Portal is now active.');
+          }
         }}
       />
 
       {/* Portal Dashboard */}
       {isPortalDashboardOpen && (
-        <PortalDashboard onClose={() => setIsPortalDashboardOpen(false)} userEmail={profile.email} />
+        <PortalDashboard 
+          onClose={() => setIsPortalDashboardOpen(false)} 
+          userEmail={profile.email} 
+          activationOption={profile.activationOption}
+          activationDate={profile.activationDate}
+        />
       )}
 
       {/* App Help Modal */}
@@ -2891,7 +3044,6 @@ export default function App() {
           setAuthModalInitialMode('login');
           setIsAuthModalOpen(true);
         }}
-        onResetAppAndRemoveAllAccounts={handleResetAppAndRemoveAllAccounts}
       />
 
       {/* Toast Notification */}

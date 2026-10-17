@@ -2,7 +2,7 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile and account information",
+      "description": "User profile, account, tenant affiliation, and subscription records",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
@@ -12,9 +12,19 @@
         "location": { "type": "string", "maxLength": 100 },
         "province": { "type": "string", "maxLength": 100 },
         "contact": { "type": "string", "maxLength": 50 },
-        "avatar": { "type": "string", "maxLength": 2048 },
+        "avatar": { "type": "string", "maxLength": 150000 },
         "idDocName": { "type": "string", "maxLength": 200 },
         "termsAccepted": { "type": "boolean" },
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "referredBy": { "type": "string", "maxLength": 150 },
+        "activationOption": { "type": "string", "enum": ["tenant", "subscription", null] },
+        "activationDate": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["paid", "pending", "verified", "rejected", "unpaid"] },
+        "subscriptionStatus": { "type": "string", "enum": ["active", "inactive", "expired"] },
+        "verificationStatus": { "type": "string", "enum": ["approved", "rejected", "pending"] },
+        "paymentProofUrl": { "type": "string", "maxLength": 2048 },
+        "profileCompleted": { "type": "boolean" },
+        "avatarUpdateCount": { "type": "number" },
         "createdAt": { "type": "string" },
         "updatedAt": { "type": "string" }
       },
@@ -24,7 +34,7 @@
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "Stores user registration, terms acceptance, and profile completion records"
+      "description": "Stores user registration, tenant linkage, verification status, and subscription records"
     }
   }
 }
