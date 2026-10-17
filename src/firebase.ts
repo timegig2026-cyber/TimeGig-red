@@ -22,6 +22,10 @@ import {
   getDocFromServer,
   serverTimestamp,
   deleteDoc,
+  collection,
+  query,
+  where,
+  onSnapshot,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -106,5 +110,9 @@ export {
   updateDoc,
   serverTimestamp,
   deleteDoc,
+  collection,
+  query,
+  where,
+  onSnapshot,
 };
 export type { FirebaseUser };

@@ -26,6 +26,7 @@ import {
   KeyRound,
   Settings,
   RefreshCw,
+  LayoutDashboard,
 } from 'lucide-react';
 import { Coordinates, SearchResult } from './types/map';
 import {
@@ -2408,38 +2409,40 @@ export default function App() {
             <span className="text-[11px]">Seekers</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (subscriptionActive) {
-                showToast('Portal Subscriptions feature is locked until your subscription ends 🔒');
-                return;
-              }
-              setActiveTab(activeTab === 'tenantportal' ? null : 'tenantportal');
-            }}
-            className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
-              subscriptionActive
-                ? 'text-amber-600 dark:text-amber-400 opacity-90'
-                : activeTab === 'tenantportal'
-                ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-            title={subscriptionActive ? 'Portal (Locked)' : 'Portal'}
-            aria-label={subscriptionActive ? 'Portal (Locked)' : 'Portal'}
-          >
-            <div className="relative">
+          {subscriptionActive ? (
+            <button
+              type="button"
+              onClick={() => setActiveTab(activeTab === 'tenantportal' ? null : 'tenantportal')}
+              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+                activeTab === 'tenantportal'
+                  ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Tenant Dashboard"
+              aria-label="Tenant Dashboard"
+            >
+              <div className="relative">
+                <LayoutDashboard className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white dark:border-slate-900 shadow-sm animate-pulse" />
+              </div>
+              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">Dashboard</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setActiveTab(activeTab === 'tenantportal' ? null : 'tenantportal')}
+              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
+                activeTab === 'tenantportal'
+                  ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+              title="Portal"
+              aria-label="Portal"
+            >
               <KeyRound className="w-5 h-5" />
-              {subscriptionActive && (
-                <span className="absolute -top-1 -right-1.5 bg-amber-500 text-white rounded-full p-0.5 shadow-sm border border-white dark:border-slate-900">
-                  <Lock className="w-2.5 h-2.5 stroke-[2.5]" />
-                </span>
-              )}
-            </div>
-            <span className="text-[11px] flex items-center gap-0.5">
-              Portal
-              {subscriptionActive && <Lock className="w-2.5 h-2.5 text-amber-500" />}
-            </span>
-          </button>
+              <span className="text-[11px]">Portal</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -2816,6 +2819,9 @@ export default function App() {
         userId={auth.currentUser?.uid}
         userEmail={profile.email}
         userName={profile.fullName}
+        userAvatar={profile.avatar}
+        subscriptionActive={subscriptionActive}
+        onNavigateTab={(tab) => setActiveTab(tab)}
         onOpenAuthModal={() => {
           setAuthModalInitialMode('login');
           setIsAuthModalOpen(true);

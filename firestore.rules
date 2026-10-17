@@ -49,20 +49,15 @@ service cloud.firestore {
     // User profile document rules
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow list: if false;
+      allow list: if isSignedIn() && (request.auth.uid == userId || exists(/databases/$(database)/documents/users/$(request.auth.uid)));
 
       allow create: if isOwner(userId) &&
                        isValidId(userId) &&
                        isValidUser(incoming(), userId) &&
                        incoming().keys().hasAll(['id', 'email', 'termsAccepted']);
 
-      allow update: if isOwner(userId) &&
-                       isValidId(userId) &&
-                       isValidUser(incoming(), userId) &&
-                       incoming().id == existing().id &&
-                       incoming().email == existing().email &&
-                       incoming().termsAccepted == existing().termsAccepted;
-
+      allow update: if isOwner(userId) || (isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)));
+      
       allow delete: if isOwner(userId) && isValidId(userId);
     }
   }

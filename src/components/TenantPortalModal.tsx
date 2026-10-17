@@ -1,7 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { X, KeyRound, CheckCircle2, Shield, UserCheck, DollarSign, Sparkles, Info, Users, AlertCircle } from 'lucide-react';
+import {
+  X,
+  KeyRound,
+  CheckCircle2,
+  Shield,
+  UserCheck,
+  DollarSign,
+  Sparkles,
+  Info,
+  Users,
+  AlertCircle,
+  LayoutDashboard,
+  ShieldCheck,
+  Building2,
+  FileCheck,
+  Download,
+  Upload,
+  Receipt,
+  FileText,
+  TrendingUp,
+  Award,
+  Check,
+  ArrowRight,
+  Flame,
+} from 'lucide-react';
 import { soundManager } from '../utils/sound';
-import { db, doc, getDoc, updateDoc } from '../firebase';
+import { db, doc, getDoc, updateDoc, collection, query, where, onSnapshot } from '../firebase';
 
 interface TenantPortalModalProps {
   isOpen: boolean;
@@ -10,31 +34,33 @@ interface TenantPortalModalProps {
   userId?: string;
   userEmail?: string;
   userName?: string;
+  userAvatar?: string;
+  subscriptionActive?: boolean;
   onOpenAuthModal?: () => void;
   onSubscriptionActivated?: () => void;
+  onNavigateTab?: (tab: 'seekers' | 'gigs' | 'profile' | 'settings') => void;
 }
 
 type SubscriptionOption = 'tenant' | 'subscription' | null;
-
-
+type DashboardTab = 'overview' | 'verification' | 'tenant_pop' | 'user_pop';
 
 export default function TenantPortalModal({
   isOpen,
   onClose,
   userId,
   userEmail,
+  subscriptionActive: propSubscriptionActive,
   onSubscriptionActivated,
+  onNavigateTab,
 }: TenantPortalModalProps) {
   const [selectedOption, setSelectedOption] = useState<SubscriptionOption>(null);
   const [confirmed, setConfirmed] = useState<boolean>(false);
   const [showInfo, setShowInfo] = useState<boolean>(false);
-
-  // Dynamic limits based on user
-  const isSpecialUser = userEmail === 'timegig2026@gmail.com';
-  const MAX_TENANTS = isSpecialUser ? 1000 : 10;
-  const MAX_SUBSCRIPTIONS = isSpecialUser ? 1000 : 50;
-
-  // Live capacities stored in localStorage
+  const [dashboardTab, setDashboardTab] = useState<DashboardTab>('overview');
+  const [tenantPopUploaded, setTenantPopUploaded] = useState<string | null>(null);
+  const [userPopUploaded, setUserPopUploaded] = useState<string | null>(null);
+  const [toastFeedback, setToastFeedback] = useState<string | null>(null);
+  const [referredUsers, setReferredUsers] = useState<any[]>([]);
   const [tenantCount, setTenantCount] = useState<number>(0);
   const [subscriptionCount, setSubscriptionCount] = useState<number>(0);
   const [subscriptionActive, setSubscriptionActive] = useState<boolean>(false);
@@ -71,6 +97,35 @@ export default function TenantPortalModal({
       }
     }
   }, [isOpen]);
+
+  const showLocalFeedback = (msg: string) => {
+    setToastFeedback(msg);
+    soundManager.playSuccessChime('subscription');
+    setTimeout(() => setToastFeedback(null), 3500);
+  };
+
+  // Dynamic limits based on user
+  const isSpecialUser = userEmail === 'timegig2026@gmail.com';
+  const MAX_TENANTS = isSpecialUser ? 1000 : 10;
+  const MAX_SUBSCRIPTIONS = isSpecialUser ? 1000 : 50;
+
+  useEffect(() => {
+    if (isOpen && userEmail) {
+      const q = query(
+        collection(db, 'users'),
+        where('referredBy', '==', userEmail),
+        where('verificationStatus', '==', 'pending')
+      );
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const users: any[] = [];
+        snapshot.forEach((doc) => {
+          users.push({ id: doc.id, ...doc.data() });
+        });
+        setReferredUsers(users);
+      });
+      return () => unsubscribe();
+    }
+  }, [isOpen, userEmail]);
 
   if (!isOpen) return null;
 
@@ -110,6 +165,148 @@ export default function TenantPortalModal({
 
   const isTenantFull = tenantCount >= MAX_TENANTS;
   const isSubFull = subscriptionCount >= MAX_SUBSCRIPTIONS;
+  const isSubActive = propSubscriptionActive || subscriptionActive;
+
+  if (isSubActive) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md animate-fadeIn">
+        <div className="relative w-full h-full max-h-[80vh] bg-white/95 dark:bg-slate-900/95 shadow-2xl rounded-3xl border border-slate-200 dark:border-slate-800 p-6 flex flex-col animate-fadeIn">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0">
+                <LayoutDashboard className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black tracking-tight text-slate-900 dark:text-white">Tenant Dashboard</h3>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-2xl bg-slate-100 dark:bg-slate-800 transition-all cursor-pointer"
+              title="Close Dashboard"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Dynamic Content Area */}
+          <div className="flex-1 overflow-y-auto p-1">
+            {dashboardTab === 'overview' ? (
+              <div className="space-y-4 animate-fadeIn">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/50">
+                    <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Active Tenants</p>
+                    <p className="text-2xl font-black text-emerald-900 dark:text-white">{tenantCount}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50">
+                    <p className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400">Active Subs</p>
+                    <p className="text-2xl font-black text-blue-900 dark:text-white">{subscriptionCount}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900/50">
+                    <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">Tenant Profit</p>
+                    <p className="text-lg font-black text-emerald-900 dark:text-white">R{(tenantCount * 299.99).toFixed(2)}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50">
+                    <p className="text-[10px] uppercase font-bold text-blue-600 dark:text-blue-400">Sub Profit</p>
+                    <p className="text-lg font-black text-blue-900 dark:text-white">R0.00</p>
+                  </div>
+                </div>
+                <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                  <p className="text-[10px] uppercase font-bold text-slate-500 mb-2">Referral Link</p>
+                  <code className="text-[11px] font-mono break-all text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-200 dark:border-slate-700 block">
+                    {`${window.location.protocol}//${window.location.host}/?ref=${userEmail || 'unknown'}`}
+                  </code>
+                </div>
+              </div>
+            ) : dashboardTab === 'verification' ? (
+              <div className="space-y-3 animate-fadeIn">
+                {referredUsers.length === 0 ? (
+                  <p className="text-center text-sm text-slate-400 py-10">No pending verifications.</p>
+                ) : (
+                  referredUsers.map(user => (
+                    <div key={user.id} className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <img src={user.avatar} alt="Avatar" className="w-10 h-10 rounded-full" />
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-white">{user.fullName}</p>
+                          <p className="text-[10px] text-slate-500">{user.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={async () => {
+                            await updateDoc(doc(db, 'users', user.id), { verificationStatus: 'approved' });
+                            showLocalFeedback('User approved.');
+                          }}
+                          className="px-3 py-1 bg-emerald-500 text-white rounded-lg text-xs font-bold"
+                        >Approve</button>
+                        <button 
+                          onClick={async () => {
+                            await updateDoc(doc(db, 'users', user.id), { verificationStatus: 'rejected' });
+                            showLocalFeedback('User rejected.');
+                          }}
+                          className="px-3 py-1 bg-rose-500 text-white rounded-lg text-xs font-bold"
+                        >Reject</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : dashboardTab === 'tenant_pop' || dashboardTab === 'user_pop' ? (
+              <div className="space-y-3 animate-fadeIn">
+                <p className="text-sm text-slate-500 mb-4">
+                  {dashboardTab === 'tenant_pop' ? 'Tenant Proof of Payment' : 'User Subscription Proof of Payment'}
+                </p>
+                {referredUsers.length === 0 ? (
+                  <p className="text-center text-sm text-slate-400 py-10">No proofs uploaded.</p>
+                ) : (
+                  referredUsers.map(user => (
+                    user.paymentProofUrl && (
+                      <div key={user.id} className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white mb-2">{user.fullName}</p>
+                        <img src={user.paymentProofUrl} alt="Proof of Payment" className="w-full h-auto rounded-lg" />
+                      </div>
+                    )
+                  ))
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-center space-y-4 h-full">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
+                  <LayoutDashboard className="w-8 h-8" />
+                </div>
+                <p className="text-sm font-medium text-slate-400 dark:text-slate-500">{dashboardTab.replace('_', ' ')} is empty</p>
+              </div>
+            )}
+          </div>
+
+          {/* Static Bottom Menu Bar */}
+          <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="grid grid-cols-4 gap-1">
+              <button type="button" onClick={() => setDashboardTab('overview')} className="flex flex-col items-center gap-1 p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">
+                <LayoutDashboard className="w-5 h-5" />
+                <span className="text-[10px] font-semibold">Overview</span>
+              </button>
+              <button type="button" onClick={() => setDashboardTab('verification')} className="flex flex-col items-center gap-1 p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">
+                <ShieldCheck className="w-5 h-5" />
+                <span className="text-[10px] font-semibold">Verification</span>
+              </button>
+              <button type="button" onClick={() => setDashboardTab('tenant_pop')} className="flex flex-col items-center gap-1 p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">
+                <Building2 className="w-5 h-5" />
+                <span className="text-[10px] font-semibold">Tenant PoP</span>
+              </button>
+              <button type="button" onClick={() => setDashboardTab('user_pop')} className="flex flex-col items-center gap-1 p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">
+                <FileCheck className="w-5 h-5" />
+                <span className="text-[10px] font-semibold">User PoP</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 bg-transparent animate-fadeIn">
