@@ -27,6 +27,7 @@ import {
   Settings,
   RefreshCw,
   LayoutDashboard,
+  Zap,
 } from 'lucide-react';
 import { Coordinates, SearchResult } from './types/map';
 import {
@@ -61,7 +62,9 @@ import { CancelGigModal } from './components/CancelGigModal';
 import { GigCompletedModal } from './components/GigCompletedModal';
 import { GigCancelledAlertModal } from './components/GigCancelledAlertModal';
 import AuthModal from './components/AuthModal';
-import TenantPortalModal from './components/TenantPortalModal';
+import ActivationModal from './components/ActivationModal';
+import PortalDashboard from './components/PortalDashboard';
+
 import SettingsModal from './components/SettingsModal';
 import {
   auth,
@@ -94,6 +97,8 @@ interface ProfileState {
   email: string;
   socials: SocialLink[];
   lastAvatarUpdate: number;
+  activationOption?: 'tenant' | 'subscription' | null;
+  activationDate?: number;
 }
 
 const CURRENT_USER_ID = 'current_user';
@@ -109,6 +114,8 @@ const DEFAULT_PROFILE: ProfileState = {
   email: '',
   socials: [],
   lastAvatarUpdate: 0,
+  activationOption: null,
+  activationDate: 0,
 };
 
 const INITIAL_SEEKERS: Seeker[] = [];
@@ -177,11 +184,12 @@ export default function App() {
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [showDropdown, setShowDropdown] = useState<boolean>(false);
 
-  // Bottom Menu Active Tab ('seekers' | 'gigs' | 'profile' | 'tenantportal' | 'settings' | null)
-  type TabType = 'seekers' | 'gigs' | 'profile' | 'tenantportal' | 'settings' | null;
+// Bottom Menu Active Tab ('seekers' | 'gigs' | 'profile' | 'settings' | null)
+  type TabType = 'seekers' | 'gigs' | 'profile' | 'settings' | null;
   const [activeTab, setActiveTab] = useState<TabType>('seekers');
   const [isRedirectingLoading, setIsRedirectingLoading] = useState<boolean>(false);
-  const [subscriptionActive, setSubscriptionActive] = useState<boolean>(false);
+  const [isActivationModalOpen, setIsActivationModalOpen] = useState<boolean>(false);
+  const [isPortalDashboardOpen, setIsPortalDashboardOpen] = useState<boolean>(false);
 
   // Typography state (Font Style and Font Size Scaling)
   const [fontStyle, setFontStyle] = useState<FontStyleKey>(() => {
@@ -419,10 +427,12 @@ export default function App() {
               contact: data.contact ?? prev.contact,
               avatar: data.avatar || currentUser.photoURL || prev.avatar,
               idDocName: data.idDocName ?? prev.idDocName,
+              activationOption: data.activationOption ?? prev.activationOption,
+              activationDate: data.activationDate ?? prev.activationDate,
             }));
             const savedLocked = safeLoadProfile<boolean>(`user_locked_${uid}`, true);
             setIsProfileLocked(savedLocked);
-            setSubscriptionActive(data.subscriptionActive || false);
+
             const storedIdDoc = await getMediaItem(`iddoc_${uid}`);
             if (storedIdDoc) {
               setProfile((prev) => ({ ...prev, idDocName: storedIdDoc }));
@@ -606,7 +616,7 @@ export default function App() {
     setIsRedirectingLoading(true);
     setTimeout(() => {
       setIsRedirectingLoading(false);
-      setActiveTab('tenantportal');
+      setActiveTab(null);
     }, 3000);
 
     if (auth.currentUser) {
@@ -1641,7 +1651,7 @@ export default function App() {
       )}
 
       {/* Blur Overlay when Seekers, Profile, Tenantportal, or Settings feature is active */}
-      {(activeTab === 'seekers' || activeTab === 'profile' || activeTab === 'tenantportal' || activeTab === 'settings') && (
+      {(activeTab === 'seekers' || activeTab === 'profile' || activeTab === 'settings') && (
         <div className="absolute inset-0 z-10 backdrop-blur-md bg-slate-950/40 transition-all pointer-events-none" />
       )}
 
@@ -1669,7 +1679,7 @@ export default function App() {
       )}
 
       {/* Top Search Bar & User Profile / Login Button (Hidden in Profile, Tenantportal, or Settings feature) */}
-      {activeTab !== 'profile' && activeTab !== 'tenantportal' && activeTab !== 'settings' && (
+      {activeTab !== 'profile' && activeTab !== 'settings' && (
         <div className="absolute top-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-[500px] z-30">
           <div className="flex items-center gap-2.5">
             <div className="relative flex-1 flex items-center shadow-2xl rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 transition-all focus-within:ring-2 focus-within:ring-blue-500">
@@ -1963,11 +1973,6 @@ export default function App() {
               <X className="w-5 h-5" />
             </button>
 
-            {subscriptionActive && (
-              <div className="mb-2 inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500 text-white rounded-full text-xs font-black shadow-md animate-pulse">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Tenant Activated
-              </div>
-            )}
             
             <div className="relative mb-2">
               <img
@@ -2409,40 +2414,31 @@ export default function App() {
             <span className="text-[11px]">Seekers</span>
           </button>
 
-          {subscriptionActive ? (
-            <button
-              type="button"
-              onClick={() => setActiveTab(activeTab === 'tenantportal' ? null : 'tenantportal')}
-              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
-                activeTab === 'tenantportal'
-                  ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Tenant Dashboard"
-              aria-label="Tenant Dashboard"
-            >
-              <div className="relative">
-                <LayoutDashboard className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-500 border border-white dark:border-slate-900 shadow-sm animate-pulse" />
+          <button
+            type="button"
+            onClick={() => {
+              if (profile.activationOption === 'tenant') {
+                setIsPortalDashboardOpen(true);
+              } else if (profile.activationOption === 'subscription') {
+                showToast(`Subscription active! ${30 - Math.floor((Date.now() - profile.activationDate) / (24 * 60 * 60 * 1000))} days remaining.`);
+              } else {
+                setIsActivationModalOpen(true);
+              }
+            }}
+            className="flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
+          >
+            {profile.activationOption === 'tenant' ? (
+              <LayoutDashboard className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            ) : profile.activationOption === 'subscription' ? (
+              <div className="w-5 h-5 flex items-center justify-center font-bold text-xs text-blue-600 dark:text-blue-400">
+                {Math.max(0, 30 - Math.floor((Date.now() - (profile.activationDate || Date.now())) / (24 * 60 * 60 * 1000)))}
               </div>
-              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">Dashboard</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setActiveTab(activeTab === 'tenantportal' ? null : 'tenantportal')}
-              className={`flex flex-col items-center gap-1 outline-none focus:outline-none transition-colors ${
-                activeTab === 'tenantportal'
-                  ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-              title="Portal"
-              aria-label="Portal"
-            >
-              <KeyRound className="w-5 h-5" />
-              <span className="text-[11px]">Portal</span>
-            </button>
-          )}
+            ) : (
+              <Zap className="w-5 h-5" />
+            )}
+            <span className="text-[11px]">{profile.activationOption ? 'Status' : 'Activate'}</span>
+          </button>
+
 
           <button
             type="button"
@@ -2811,31 +2807,23 @@ export default function App() {
         onLoginSuccess={handleLoginSuccess}
       />
 
-      {/* Tenant Portal Modal */}
-      <TenantPortalModal
-        isOpen={activeTab === 'tenantportal'}
-        onClose={() => setActiveTab(null)}
-        isLoggedIn={isLoggedIn}
-        userId={auth.currentUser?.uid}
-        userEmail={profile.email}
-        userName={profile.fullName}
-        userAvatar={profile.avatar}
-        subscriptionActive={subscriptionActive}
-        onNavigateTab={(tab) => setActiveTab(tab)}
-        onOpenAuthModal={() => {
-          setAuthModalInitialMode('login');
-          setIsAuthModalOpen(true);
-        }}
-        onSubscriptionActivated={() => {
-          setSubscriptionActive(true);
-          showToast('Subscription activated successfully! Loading GiGs...');
-          setIsRedirectingLoading(true);
-          setTimeout(() => {
-            setIsRedirectingLoading(false);
-            setActiveTab('gigs');
-          }, 3000);
+      {/* Activation Modal */}
+      <ActivationModal
+        isOpen={isActivationModalOpen}
+        onClose={() => setIsActivationModalOpen(false)}
+        profile={profile}
+        userId={auth.currentUser?.uid || ''}
+        onActivate={() => {
+          setIsActivationModalOpen(false);
+          showToast(`Successfully submitted documents for activation!`);
         }}
       />
+
+      {/* Portal Dashboard */}
+      {isPortalDashboardOpen && (
+        <PortalDashboard onClose={() => setIsPortalDashboardOpen(false)} userEmail={profile.email} />
+      )}
+
 
       {/* Settings Modal: Font Style, Font Size Scaling & Account Logout */}
       <SettingsModal

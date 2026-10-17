@@ -18,7 +18,7 @@ class SoundManager {
   }
 
   // Play a pleasant chime arpeggio
-  public playSuccessChime(type: 'signup' | 'login' | 'profile' | 'subscription' | 'success' = 'success') {
+  public playSuccessChime(type: 'signup' | 'login' | 'profile' | 'success' = 'success') {
     try {
       const ctx = this.getContext();
       if (!ctx) return;
@@ -33,14 +33,11 @@ class SoundManager {
         notes = [523.25, 783.99, 1046.50]; // C5, G5, C6 (Quick confirmation)
       } else if (type === 'profile') {
         notes = [587.33, 739.98, 880, 1174.66]; // D5, F#5, A5, D6 (Accomplishment)
-      } else if (type === 'subscription') {
-        notes = [392, 523.25, 659.25, 783.99, 1046.50]; // G4, C5, E5, G5, C6 (Cash register / premium chime)
       }
-
       notes.forEach((freq, index) => {
         const o = ctx.createOscillator();
         const g = ctx.createGain();
-        o.type = type === 'subscription' ? 'triangle' : 'sine';
+        o.type = 'sine';
         o.frequency.setValueAtTime(freq, now + index * 0.08);
 
         g.gain.setValueAtTime(0, now + index * 0.08);

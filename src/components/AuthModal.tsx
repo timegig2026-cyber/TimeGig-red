@@ -157,7 +157,6 @@ export default function AuthModal({
           contact: '',
           avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
           idDocName: '',
-          verificationStatus: 'pending',
           referredBy: refCode || null,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
