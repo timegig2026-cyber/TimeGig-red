@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2, DollarSign, UserCheck, Shield, Zap } from 'lucide-react';
 import { db, doc, updateDoc } from '../firebase';
+import { getMediaItem } from '../utils/storage';
 
 interface ActivationModalProps {
   isOpen: boolean;
@@ -15,8 +16,21 @@ export default function ActivationModal({ isOpen, onClose, profile, userId, onAc
   const [showSubmission, setShowSubmission] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [status, setStatus] = useState<'idle' | 'activating' | 'success'>('idle');
+  const [idDocData, setIdDocData] = useState<string>('');
 
-  const hasDocuments = profile && profile.avatar && profile.idDocName;
+  useEffect(() => {
+    if (isOpen && userId) {
+      getMediaItem(`iddoc_${userId}`).then((res) => {
+        if (res) setIdDocData(res);
+        else if (profile?.idDocName) setIdDocData(profile.idDocName);
+      });
+    } else if (profile?.idDocName) {
+      setIdDocData(profile.idDocName);
+    }
+  }, [isOpen, userId, profile]);
+
+  const activeIdDoc = idDocData || profile?.idDocName;
+  const hasDocuments = profile && profile.avatar && activeIdDoc;
 
   const handleActivate = async () => {
     if (!selectedOption || !userId) return;
@@ -72,11 +86,11 @@ export default function ActivationModal({ isOpen, onClose, profile, userId, onAc
             </div>
             <div className="space-y-2">
               <p className="text-[10px] uppercase font-bold text-slate-500">ID Document</p>
-              <div className="w-full aspect-square rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-xs text-center p-2 break-all">
-                {profile.idDocName && profile.idDocName.startsWith('data:') ? (
-                  <img src={profile.idDocName} alt="ID Document" className="w-full h-full object-cover rounded-2xl" />
+              <div className="w-full aspect-square rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-xs text-center p-2 break-all overflow-hidden">
+                {activeIdDoc && activeIdDoc.startsWith('data:') ? (
+                  <img src={activeIdDoc} alt="ID Document" className="w-full h-full object-cover rounded-2xl" />
                 ) : (
-                  profile.idDocName
+                  activeIdDoc || 'No ID Document'
                 )}
               </div>
             </div>
